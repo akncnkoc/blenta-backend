@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                  @id @default(uuid())
+  name                  String
+  surname               String
+  username              String?                 @unique
+  email                 String                  @unique
+  password              String
+  gmailLoginKey         String?
+  icloudLoginKey        String?
+  referenceCode         String?
+  isPaidMembership      Boolean                 @default(false)
+  paidMembershipKey     String?
+  likedQuestions        UserLikedQuestion[]
+  userAnsweredQuestions UserAnsweredQuestions[]
+}
+
+model Category {
+  id               String     @id @default(uuid())
+  name             String
+  description      String?
+  parentCategoryId String? // optional FK field
+  parent_category  Category?  @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
+  childCategories  Category[] @relation("CategoryToCategory")
+  questions        Question[]
+  culture          String
+}
+
+model Question {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  categoryId  String
+  culture     String
+  sort        Int      @default(1)
+  Answer      Answer[]
+  Category    Category @relation(fields: [categoryId], references: [id])
+}
+
+model UserLikedQuestion {
+  id         String @id @default(uuid())
+  userId     String
+  questionId String
+  User       User   @relation(fields: [userId], references: [id])
+}
+
+model UserAnsweredQuestions {
+  id         String @id @default(uuid())
+  userId     String
+  questionId String
+  answerId   String
+  User       User   @relation(fields: [userId], references: [id])
+}
+
+model Answer {
+  id         String   @id @default(uuid())
+  question   Question @relation(fields: [questionId], references: [id])
+  questionId String
+  content    String
+  culture    String
+}
