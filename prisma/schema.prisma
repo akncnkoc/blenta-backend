@@ -19,19 +19,51 @@ model User {
   referenceCode         String?
   isPaidMembership      Boolean                 @default(false)
   paidMembershipKey     String?
+  createdAt             DateTime                @default(now())
+  UserAgreement         UserAgreement[]
+  UserOneTimeCode       UserOneTimeCode[]
   likedQuestions        UserLikedQuestion[]
   userAnsweredQuestions UserAnsweredQuestions[]
+  UserViewedQuestion    UserViewedQuestion[]
+}
+
+model UserOneTimeCode {
+  id        String   @id @default(uuid())
+  userId    String
+  code      String
+  expiresAt DateTime @default(now()) // 10Minute
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id])
+}
+
+model Agreement {
+  id            String          @id @default(uuid())
+  title         String
+  description   String
+  version       String
+  UserAgreement UserAgreement[]
+}
+
+model UserAgreement {
+  id          String    @id @default(uuid())
+  agreementId String
+  userId      String
+  User        User      @relation(fields: [userId], references: [id])
+  Agreement   Agreement @relation(fields: [agreementId], references: [id])
 }
 
 model Category {
-  id               String     @id @default(uuid())
-  name             String
-  description      String?
-  parentCategoryId String? // optional FK field
-  parentCategory  Category?  @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
-  childCategories  Category[] @relation("CategoryToCategory")
-  questions        Question[]
-  culture          String
+  id                    String                  @id @default(uuid())
+  name                  String
+  description           String?
+  parentCategoryId      String? // optional FK field
+  culture               String
+  color                 String                  @default("white")
+  type                  String // general | ref |  premimum
+  UserCompletedCategory UserCompletedCategory[]
+  parentCategory        Category?               @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
+  childCategories       Category[]              @relation("CategoryToCategory")
+  questions             Question[]
 }
 
 model Question {
@@ -41,7 +73,6 @@ model Question {
   categoryId  String
   culture     String
   sort        Int      @default(1)
-  Answer      Answer[]
   Category    Category @relation(fields: [categoryId], references: [id])
 }
 
@@ -52,18 +83,26 @@ model UserLikedQuestion {
   User       User   @relation(fields: [userId], references: [id])
 }
 
+model UserViewedQuestion {
+  id         String   @id @default(uuid())
+  userId     String
+  questionId String
+  viewedAt   DateTime @default(now())
+  User       User     @relation(fields: [userId], references: [id])
+}
+
+model UserCompletedCategory {
+  id         String   @id @default(uuid())
+  userId     String
+  categoryId String
+  viewedAt   DateTime @default(now())
+  Category   Category @relation(fields: [categoryId], references: [id])
+}
+
 model UserAnsweredQuestions {
   id         String @id @default(uuid())
   userId     String
   questionId String
   answerId   String
   User       User   @relation(fields: [userId], references: [id])
-}
-
-model Answer {
-  id         String   @id @default(uuid())
-  question   Question @relation(fields: [questionId], references: [id])
-  questionId String
-  content    String
-  culture    String
 }

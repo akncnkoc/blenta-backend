@@ -38,6 +38,7 @@ export const getCategoryQuestions = async (
     reply.code(500).send({ message: "Internal Server Error", error });
   }
 };
+
 export const getQuestion = async (req: FastifyRequest, reply: FastifyReply) => {
   const { id } = req.params as { id: string };
 

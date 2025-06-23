@@ -5,7 +5,7 @@ import bcrypt from "bcrypt";
 const SALT_ROUNDS = 10;
 export const getUsers = async (req: FastifyRequest, reply: FastifyReply) => {
   const users = await prisma.user.findMany({
-    include: { likedQuestions: true, userAnsweredQuestions: true },
+    include: { likedQuestions: true },
   });
   reply.send(users);
 };
