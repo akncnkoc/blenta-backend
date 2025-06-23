@@ -1,3 +1,19 @@
+export const QuestionSchema = {
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    title: { type: "string" },
+    description: { type: "string" },
+    categoryId: { type: "string" },
+    culture: { type: "string" },
+    sort: { type: "number" },
+  },
+};
+
+export const QuestionArraySchema = {
+  type: "array",
+  items: QuestionSchema,
+};
 export const getCategoryQuestionsSchema = {
   tags: ["Question"],
   summary: "Get category questions",
@@ -11,18 +27,7 @@ export const getCategoryQuestionsSchema = {
   response: {
     200: {
       description: "Questions found",
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          id: { type: "string" },
-          title: { type: "string" },
-          description: { type: "string" },
-          categoryId: { type: "string" },
-          culture: { type: "string" },
-          sort: { type: "number" },
-        },
-      },
+      $ref: "Question#",
     },
   },
 };
@@ -38,14 +43,7 @@ export const getQuestionSchema = {
     200: {
       description: "Question found",
       type: "object",
-      properties: {
-        id: { type: "string" },
-        title: { type: "string" },
-        description: { type: "string" },
-        categoryId: { type: "string" },
-        culture: { type: "string" },
-        sort: { type: "number" },
-      },
+      $ref: "Question#",
     },
   },
 };
@@ -68,14 +66,7 @@ export const createQuestionSchema = {
     200: {
       description: "Question created",
       type: "object",
-      properties: {
-        id: { type: "string" },
-        title: { type: "string" },
-        description: { type: "string" },
-        categoryId: { type: "string" },
-        culture: { type: "string" },
-        sort: { type: "integer" }, // ✔ match the input type
-      },
+      $ref: "Question#",
     },
   },
 };
@@ -103,14 +94,7 @@ export const updateQuestionSchema = {
     200: {
       description: "Question updated",
       type: "object",
-      properties: {
-        id: { type: "string" },
-        title: { type: "string" },
-        description: { type: "string" },
-        categoryId: { type: "string" },
-        culture: { type: "string" },
-        sort: { type: "integer" }, // ✔ match the input type
-      },
+      $ref: "Question#",
     },
   },
 };
@@ -127,14 +111,7 @@ export const deleteQuestionSchema = {
     200: {
       description: "Question deleted",
       type: "object",
-      properties: {
-        id: { type: "string" },
-        title: { type: "string" },
-        description: { type: "string" },
-        categoryId: { type: "string" },
-        culture: { type: "string" },
-        sort: { type: "number" },
-      },
+      $ref: "Category#",
     },
   },
 };

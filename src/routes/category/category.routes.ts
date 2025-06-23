@@ -6,11 +6,17 @@ import {
   getCategory,
   updateCategory,
 } from "./category.controller";
+import {
+  createCategorySchema,
+  deleteCategorySchema,
+  getCategorySchema,
+  updateCategorySchema,
+} from "./category.schema";
 
 export default async function categoryRoutes(fastify: FastifyInstance) {
   fastify.get("/", getAllCategories);
-  fastify.get("/id", getCategory);
-  fastify.post("/", createCategory);
-  fastify.put("/:id", updateCategory);
-  fastify.delete("/:id", deleteCategory);
+  fastify.get("/id", { schema: getCategorySchema }, getCategory);
+  fastify.post("/", { schema: createCategorySchema }, createCategory);
+  fastify.put("/:id", { schema: updateCategorySchema }, updateCategory);
+  fastify.delete("/:id", { schema: deleteCategorySchema }, deleteCategory);
 }

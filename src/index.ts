@@ -7,6 +7,8 @@ import { config } from "./config";
 import jwtPlugin from "./plugins/jwt";
 import questionRoutes from "./routes/question/question.routes";
 import categoryRoutes from "./routes/category/category.routes";
+import { CategorySchema } from "./routes/category/category.schema";
+import { QuestionSchema } from "./routes/question/question.schema";
 
 const fastify = Fastify({ logger: true });
 
@@ -28,6 +30,14 @@ const start = async () => {
       uiConfig: {
         docExpansion: "none",
       },
+    });
+    fastify.addSchema({
+      $id: "Category",
+      ...CategorySchema,
+    });
+    fastify.addSchema({
+      $id: "Question",
+      ...QuestionSchema,
     });
 
     fastify.register(jwtPlugin);
