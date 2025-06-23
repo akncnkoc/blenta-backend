@@ -6,3 +6,8 @@ declare module "@fastify/jwt" {
     user: { userId: string }; // request.user nesnesi
   }
 }
+declare module "fastify" {
+  interface FastifyRequest {
+    jwt: JWT;
+  }
+}

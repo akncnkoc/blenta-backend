@@ -9,7 +9,8 @@ import questionRoutes from "./routes/question/question.routes";
 import categoryRoutes from "./routes/category/category.routes";
 import { CategorySchema } from "./routes/category/category.schema";
 import { QuestionSchema } from "./routes/question/question.schema";
-
+import { userSchemas } from "./routes/user/user.schemas";
+import fCookie from "@fastify/cookie";
 const fastify = Fastify({ logger: true });
 
 const start = async () => {
@@ -40,12 +41,27 @@ const start = async () => {
       ...QuestionSchema,
     });
 
+    for (let schema of [...userSchemas]) {
+      fastify.addSchema(schema);
+    }
+
     fastify.register(jwtPlugin);
+    fastify.addHook("preHandler", (req, res, next) => {
+      req.jwt = fastify.jwt;
+      return next();
+    });
+    // cookies
+    fastify.register(fCookie, {
+      secret: "some-secret-key",
+      hook: "preHandler",
+    });
     fastify.register(errorHandler);
     fastify.register(userRoutes, { prefix: "/user" });
     fastify.register(categoryRoutes, { prefix: "/category" });
     fastify.register(questionRoutes, { prefix: "/question" });
-
+    fastify.get("/healthcheck", (req, res) => {
+      res.send({ message: "Success" });
+    });
     // fastify.get(
     //   "/private",
     //   { preHandler: [fastify.authenticate] },
