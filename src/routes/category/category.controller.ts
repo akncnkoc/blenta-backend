@@ -6,12 +6,18 @@ type CreateCategoryRequest = {
   name: string;
   parentCategoryId?: string;
   culture: string;
+  type: "general" | "ref" | "premium";
+  color: string;
+  description: string;
 };
 
 type UpdateCategoryRequest = {
   name: string;
   parentCategoryId?: string;
   culture: string;
+  type: "general" | "ref" | "premium";
+  color: string;
+  description: string;
 };
 
 export const getAllCategories = async (
@@ -30,12 +36,16 @@ export const getAllCategories = async (
     reply.code(500).send({ message: "Internal Server Error", error });
   }
 };
+
 export const getCategory = async (req: FastifyRequest, reply: FastifyReply) => {
   const { id } = req.params as { id: string };
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const category = await tx.category.findUnique({ where: { id } });
+      const category = await tx.category.findUnique({
+        where: { id },
+        include: { questions: true, userCompletedCategories: true },
+      });
       if (!category) {
         return { code: 404, error: { message: "Category not found" } };
       }
@@ -58,7 +68,8 @@ export const createCategory = async (
   req: FastifyRequest,
   reply: FastifyReply,
 ) => {
-  const { name, parentCategoryId, culture } = req.body as CreateCategoryRequest;
+  const { name, parentCategoryId, culture, type, color, description } =
+    req.body as CreateCategoryRequest;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -67,6 +78,9 @@ export const createCategory = async (
           name,
           parentCategoryId,
           culture,
+          type,
+          color,
+          description,
         },
       });
 
@@ -84,7 +98,8 @@ export const updateCategory = async (
   reply: FastifyReply,
 ) => {
   const { id } = req.params as { id: string };
-  const { name, parentCategoryId, culture } = req.body as UpdateCategoryRequest;
+  const { name, parentCategoryId, culture, type, color, description } =
+    req.body as UpdateCategoryRequest;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -99,6 +114,9 @@ export const updateCategory = async (
           name,
           parentCategoryId,
           culture,
+          type,
+          color,
+          description,
         },
       });
 
@@ -111,6 +129,41 @@ export const updateCategory = async (
     }
 
     reply.code(200).send(result.category);
+  } catch (error) {
+    reply.code(500).send({ message: "Internal Server Error", error });
+  }
+};
+
+export const categoryQuestionCompleted = async (
+  req: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const userId = req.user.id;
+  const { id } = req.params as { id: string };
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const category = await tx.category.findUnique({ where: { id } });
+      if (!category) {
+        return { code: 404, error: { message: "Category not found" } };
+      }
+
+      const userCompletedCategory = await tx.userCompletedCategory.create({
+        data: {
+          userId,
+          categoryId: id,
+        },
+      });
+
+      return { completedCategory: userCompletedCategory };
+    });
+
+    if (result.error) {
+      reply.code(result.code).send(result.error);
+      return;
+    }
+
+    reply.code(200).send(result.completedCategory);
   } catch (error) {
     reply.code(500).send({ message: "Internal Server Error", error });
   }

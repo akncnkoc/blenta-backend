@@ -22,19 +22,68 @@ export const getCategoryQuestions = async (
   req: FastifyRequest,
   reply: FastifyReply,
 ) => {
+  var userId = req.user.id;
   const { categoryId } = req.params as { categoryId: string };
+  const { page = 1, limit = 10 } = req.query as {
+    page?: number;
+    limit?: number;
+  };
+
+  const skip = (page - 1) * limit;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      var questions = await tx.question.findMany({
-        where: { categoryId: categoryId },
-      });
+      const user = await tx.user.findFirst({ where: { id: userId } });
+      if (!user) return { code: 404, error: { message: "User not found" } };
 
-      return { questions: questions };
+      const category = await tx.category.findFirst({
+        where: { id: categoryId },
+      });
+      if (!category)
+        return { code: 404, error: { message: "Category not found" } };
+
+      if (category.isPremiumCat && !user.isPaidMembership) {
+        return {
+          code: 409,
+          error: { message: "This user cannot access this premium category" },
+        };
+      }
+      if (
+        category.isRefCat &&
+        (!user.referenceCode || user.referenceCode == "")
+      ) {
+        return {
+          code: 409,
+          error: {
+            message: "This user cannot access this referenced category",
+          },
+        };
+      }
+
+      const [questions, total] = await Promise.all([
+        tx.question.findMany({
+          where: { categoryId },
+          skip,
+          take: limit,
+          orderBy: { sort: "asc" },
+        }),
+        tx.question.count({
+          where: { categoryId },
+        }),
+      ]);
+
+      return {
+        questions,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
     });
 
-    reply.code(201).send(result.questions);
+    reply.code(200).send(result);
   } catch (error) {
+    console.error("getCategoryQuestions error:", error);
     reply.code(500).send({ message: "Internal Server Error", error });
   }
 };
@@ -133,6 +182,90 @@ export const updateQuestion = async (
     });
 
     reply.code(201).send(result.question);
+  } catch (error) {
+    reply.code(500).send({ message: "Internal Server Error", error });
+  }
+};
+
+export const questionViewed = async (
+  req: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const userId = req.user.id;
+  const { id } = req.params as { id: string };
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      var question = await tx.question.findFirst({ where: { id: id } });
+      if (!question) {
+        return { code: 404, error: { message: "Question not found" } };
+      }
+
+      const createViewedQuestion = await tx.userViewedQuestion.create({
+        data: {
+          userId,
+          questionId: id,
+        },
+      });
+
+      return { viewedQuestion: createViewedQuestion };
+    });
+
+    reply.code(201).send(result.viewedQuestion);
+  } catch (error) {
+    reply.code(500).send({ message: "Internal Server Error", error });
+  }
+};
+
+export const likeQuestion = async (
+  req: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const userId = req.user.id;
+  const { id } = req.params as { id: string };
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      var question = await tx.question.findFirst({ where: { id: id } });
+      if (!question) {
+        return { code: 404, error: { message: "Question not found" } };
+      }
+
+      const createLikedQuestion = await tx.userLikedQuestion.create({
+        data: {
+          userId,
+          questionId: id,
+        },
+      });
+
+      return { likedQuestion: createLikedQuestion };
+    });
+
+    reply.code(201).send(result.likedQuestion);
+  } catch (error) {
+    reply.code(500).send({ message: "Internal Server Error", error });
+  }
+};
+
+export const unlikeQuestion = async (
+  req: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const userId = req.user.id;
+  const { id } = req.params as { id: string };
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      var question = await tx.question.findFirst({ where: { id: id } });
+      if (!question) {
+        return { code: 404, error: { message: "Question not found" } };
+      }
+
+      const unlikedQuestion = await tx.userLikedQuestion.deleteMany({
+        where: { id: id, userId: userId },
+      });
+
+      return { unlikedQuestion };
+    });
+
+    reply.code(201).send(result.unlikedQuestion);
   } catch (error) {
     reply.code(500).send({ message: "Internal Server Error", error });
   }

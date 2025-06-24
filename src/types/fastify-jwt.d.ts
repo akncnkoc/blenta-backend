@@ -2,8 +2,7 @@ import "@fastify/jwt";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
-    payload: { userId: string }; // JWT içine ne koyuyorsan
-    user: { userId: string }; // request.user nesnesi
+    user: { id: string; name: string; surname: string; email: string }; // request.user nesnesi
   }
 }
 declare module "fastify" {

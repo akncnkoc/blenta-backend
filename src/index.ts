@@ -11,6 +11,7 @@ import { CategorySchema } from "./routes/category/category.schema";
 import { QuestionSchema } from "./routes/question/question.schema";
 import { userSchemas } from "./routes/user/user.schemas";
 import fCookie from "@fastify/cookie";
+import * as OneSignal from "@onesignal/node-onesignal";
 const fastify = Fastify({ logger: true });
 
 const start = async () => {
@@ -47,7 +48,7 @@ const start = async () => {
 
     fastify.register(jwtPlugin);
     fastify.addHook("preHandler", (req, res, next) => {
-      req.jwt = fastify.jwt;
+      // req.jwt = fastify.jwt;
       return next();
     });
     // cookies
@@ -61,6 +62,25 @@ const start = async () => {
     fastify.register(questionRoutes, { prefix: "/question" });
     fastify.get("/healthcheck", (req, res) => {
       res.send({ message: "Success" });
+    });
+    var appId = "b8432b15-baab-4b65-8943-139bcd7a31e4";
+    const configuration = OneSignal.createConfiguration({
+      organizationApiKey: "",
+      restApiKey:
+        "os_v2_app_xbbswfn2vnfwlckdcon426rr4rbxgeikxqme5buyydorgcpwil7gbqp52bsb3m22muoztiyvjijlt35hf6sm6iwphx5ymgxtcnwebpy",
+    });
+    const client = new OneSignal.DefaultApi(configuration);
+    client.createNotification({
+      app_id: appId,
+      name: "Test Notification",
+      contents: {
+        en: "Test Notification Content",
+        tr: "Test Bildirim Icerigi",
+      },
+      headings: {
+        en: "Test Notification",
+        tr: "Test Bildirim",
+      },
     });
     // fastify.get(
     //   "/private",

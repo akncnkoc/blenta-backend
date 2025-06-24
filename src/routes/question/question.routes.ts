@@ -4,6 +4,9 @@ import {
   deleteQuestion,
   getCategoryQuestions,
   getQuestion,
+  likeQuestion,
+  questionViewed,
+  unlikeQuestion,
   updateQuestion,
 } from "./question.controller";
 import {
@@ -17,16 +20,22 @@ import {
 export default async function questionRoutes(fastify: FastifyInstance) {
   fastify.get(
     "/category/:categoryId",
-    { schema: getCategoryQuestionsSchema },
+    {
+      schema: getCategoryQuestionsSchema,
+      preHandler: [fastify.authenticate],
+    },
     getCategoryQuestions,
   );
   fastify.get(
     "/:id",
 
-    { schema: getQuestionSchema },
+    { schema: getQuestionSchema, preHandler: [fastify.authenticate] },
     getQuestion,
   );
   fastify.post("", { schema: createQuestionSchema }, createQuestion);
   fastify.put("/:id", { schema: updateQuestionSchema }, updateQuestion);
+  fastify.put("/:id/questionReaded", questionViewed);
+  fastify.put("/:id/like-question", likeQuestion);
+  fastify.put("/:id/unlike-question", unlikeQuestion);
   fastify.delete("/:id", { schema: deleteQuestionSchema }, deleteQuestion);
 }

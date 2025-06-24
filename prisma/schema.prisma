@@ -7,24 +7,38 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  ADMIN
+  USER
+}
+
+enum AppEnvironment {
+  PHONE
+  TABLET
+}
+
 model User {
   id                    String                  @id @default(uuid())
-  name                  String
-  surname               String
+  name                  String?
+  surname               String?
   username              String?                 @unique
   email                 String                  @unique
-  password              String
+  password              String?
   gmailLoginKey         String?
   icloudLoginKey        String?
   referenceCode         String?
   isPaidMembership      Boolean                 @default(false)
   paidMembershipKey     String?
+  role                  Role                    @default(USER)
   createdAt             DateTime                @default(now())
-  UserAgreement         UserAgreement[]
-  UserOneTimeCode       UserOneTimeCode[]
+  userAgreements        UserAgreement[]
+  userOneTimeCodes      UserOneTimeCode[]
   likedQuestions        UserLikedQuestion[]
   userAnsweredQuestions UserAnsweredQuestions[]
-  UserViewedQuestion    UserViewedQuestion[]
+  userViewedQuestions   UserViewedQuestion[]
+  appEnvironment        AppEnvironment
+
+  @@map("users")
 }
 
 model UserOneTimeCode {
@@ -34,53 +48,69 @@ model UserOneTimeCode {
   expiresAt DateTime @default(now()) // 10Minute
   createdAt DateTime @default(now())
   User      User     @relation(fields: [userId], references: [id])
+
+  @@map("user_one_time_codes")
 }
 
 model Agreement {
-  id            String          @id @default(uuid())
-  title         String
-  description   String
-  version       String
-  UserAgreement UserAgreement[]
+  id             String          @id @default(uuid())
+  title          String
+  description    String
+  version        String
+  userAgreements UserAgreement[]
+
+  @@map("agreements")
 }
 
 model UserAgreement {
   id          String    @id @default(uuid())
   agreementId String
   userId      String
-  User        User      @relation(fields: [userId], references: [id])
-  Agreement   Agreement @relation(fields: [agreementId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  agreement   Agreement @relation(fields: [agreementId], references: [id])
+
+  @@map("user_agreements")
 }
 
 model Category {
-  id                    String                  @id @default(uuid())
-  name                  String
-  description           String?
-  parentCategoryId      String? // optional FK field
-  culture               String
-  color                 String                  @default("white")
-  type                  String // general | ref |  premimum
-  UserCompletedCategory UserCompletedCategory[]
-  parentCategory        Category?               @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
-  childCategories       Category[]              @relation("CategoryToCategory")
-  questions             Question[]
+  id                      String                  @id @default(uuid())
+  name                    String
+  description             String?
+  parentCategoryId        String? // optional FK field
+  culture                 String
+  color                   String                  @default("white")
+  type                    String // general | ref |  premimum
+  userCompletedCategories UserCompletedCategory[]
+  parentCategory          Category?               @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
+  childCategories         Category[]              @relation("CategoryToCategory")
+  questions               Question[]
+  isPremiumCat            Boolean                 @default(false)
+  isRefCat                Boolean                 @default(false)
+
+  @@map("categories")
 }
 
 model Question {
-  id          String   @id @default(uuid())
-  title       String
-  description String
-  categoryId  String
-  culture     String
-  sort        Int      @default(1)
-  Category    Category @relation(fields: [categoryId], references: [id])
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  categoryId   String
+  culture      String
+  sort         Int      @default(1)
+  category     Category @relation(fields: [categoryId], references: [id])
+  isPremiumQue Boolean  @default(false)
+  isRefQue     Boolean  @default(false)
+
+  @@map("questions")
 }
 
 model UserLikedQuestion {
   id         String @id @default(uuid())
   userId     String
   questionId String
-  User       User   @relation(fields: [userId], references: [id])
+  user       User   @relation(fields: [userId], references: [id])
+
+  @@map("user_liked_questions")
 }
 
 model UserViewedQuestion {
@@ -88,7 +118,9 @@ model UserViewedQuestion {
   userId     String
   questionId String
   viewedAt   DateTime @default(now())
-  User       User     @relation(fields: [userId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("user_viewed_questions")
 }
 
 model UserCompletedCategory {
@@ -96,7 +128,9 @@ model UserCompletedCategory {
   userId     String
   categoryId String
   viewedAt   DateTime @default(now())
-  Category   Category @relation(fields: [categoryId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@map("user_completed_categories")
 }
 
 model UserAnsweredQuestions {
@@ -104,5 +138,7 @@ model UserAnsweredQuestions {
   userId     String
   questionId String
   answerId   String
-  User       User   @relation(fields: [userId], references: [id])
+  user       User   @relation(fields: [userId], references: [id])
+
+  @@map("user_answered_questions")
 }

@@ -11,7 +11,9 @@ declare module "fastify" {
     ) => Promise<void>;
   }
 
-  interface FastifyRequest {}
+  interface FastifyRequest {
+    user: { id: string; name: string; surname: string; email: string };
+  }
 }
 
 export default fp(async function (fastify: FastifyInstance) {
