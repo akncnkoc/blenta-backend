@@ -5,6 +5,7 @@ import {
   deleteCategory,
   getAllCategories,
   getCategory,
+  likeCategory,
   updateCategory,
 } from "./category.controller";
 import {
@@ -20,5 +21,6 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
   fastify.post("/", { schema: createCategorySchema }, createCategory);
   fastify.put("/:id", { schema: updateCategorySchema }, updateCategory);
   fastify.put("/:id/categoryQuestionCompleted", categoryQuestionCompleted);
+  fastify.put("/:id/likeCategory", likeCategory);
   fastify.delete("/:id", { schema: deleteCategorySchema }, deleteCategory);
 }

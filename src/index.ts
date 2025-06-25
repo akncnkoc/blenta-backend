@@ -12,8 +12,10 @@ import { QuestionSchema } from "./routes/question/question.schema";
 import { userSchemas } from "./routes/user/user.schemas";
 import fCookie from "@fastify/cookie";
 import * as OneSignal from "@onesignal/node-onesignal";
-const fastify = Fastify({ logger: true });
+import FastifyVite from "@fastify/vite";
+import path from "path";
 
+const fastify = Fastify({ logger: true });
 const start = async () => {
   try {
     await fastify.register(fastifySwagger, {
@@ -25,6 +27,15 @@ const start = async () => {
         },
       },
       hideUntagged: true,
+    });
+    // await fastify.register(FastifyVite, {
+    //   root: path.resolve(__dirname), // where to look for vite.config.js
+    //   dev: process.argv.includes("--dev"),
+    //   spa: true,
+    // });
+
+    fastify.get("/", (req, reply) => {
+      return reply.html();
     });
 
     await fastify.register(fastifySwaggerUi, {
@@ -48,7 +59,7 @@ const start = async () => {
 
     fastify.register(jwtPlugin);
     fastify.addHook("preHandler", (req, res, next) => {
-      // req.jwt = fastify.jwt;
+      req.jwt = fastify.jwt;
       return next();
     });
     // cookies
@@ -89,7 +100,7 @@ const start = async () => {
     //     return { secret: "you found it!" };
     //   },
     // );
-
+    await fastify.vite.ready();
     await fastify.listen({ port: Number(config.port) });
     console.log(`🚀 Server running at http://localhost:${config.port}`);
   } catch (err) {

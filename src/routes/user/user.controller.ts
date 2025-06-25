@@ -8,6 +8,7 @@ import {
   confirmationEmailEn,
   confirmationEmailTr,
 } from "../../lib/emails/confirmation-email";
+import jsonwebtoken from "jsonwebtoken"; // NOT your app token, Apple's token decoder
 const SALT_ROUNDS = 10;
 export const getUsers = async (_: FastifyRequest, reply: FastifyReply) => {
   const users = await prisma.user.findMany({
@@ -33,6 +34,7 @@ export const loginUserWithEmail = async (
         surname: "",
         password: "",
         role: "USER",
+        appEnvironment: "PHONE",
       },
     });
     var oneTimePassCode = String(Math.floor(Math.random() * 1000000)).padStart(
@@ -98,6 +100,7 @@ export const loginUserWithEmailOtp = async (
         id: user.id,
         email: user.email,
         name: user.name,
+        surname: user.surname,
         role: user.role,
       };
 
@@ -130,6 +133,118 @@ export const loginUserWithEmailOtp = async (
   }
 };
 
+export const loginUserWithAppleToken = async (
+  req: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const { id_token } = req.body as { id_token: string };
+
+  // Apple ID token decode
+  const decoded: any = jsonwebtoken.decode(id_token);
+
+  const appleSub = decoded?.sub;
+  const email = decoded?.email; // Apple bazen e-posta vermez (ilk girişte verir)
+  const name = decoded?.name || null;
+
+  if (!appleSub) {
+    return reply.code(400).send({ message: "Invalid Apple token" });
+  }
+
+  let user = await prisma.user.findUnique({
+    where: { icloudLoginKey: appleSub },
+  });
+
+  // ❗ Eğer kullanıcı yoksa oluştur
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        icloudLoginKey: appleSub,
+        email: email ?? `apple_${appleSub}@private.appleid.com`, // fallback mail
+        name,
+        appEnvironment: "PHONE",
+      },
+    });
+  }
+
+  const payload = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    surname: user.surname,
+    role: user.role,
+  };
+
+  const token = req.jwt.sign(payload);
+
+  reply.setCookie("access_token", token, {
+    path: "/",
+    httpOnly: true,
+    secure: true,
+    sameSite: "strict",
+  });
+
+  return { accessToken: token };
+};
+
+export const loginUserWithGoogle = async (
+  req: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const { id_token } = req.body as { id_token: string };
+
+  if (!id_token) {
+    return reply.code(400).send({ message: "id_token is required" });
+  }
+
+  const decoded: any = jsonwebtoken.decode(id_token);
+
+  const googleSub = decoded?.sub;
+  const email = decoded?.email;
+  const name = decoded?.name;
+
+  if (!googleSub || !email) {
+    return reply.code(400).send({ message: "Invalid Google token" });
+  }
+
+  // Kullanıcıyı googleLoginKey ile ara
+  let user = await prisma.user.findUnique({
+    where: { gmailLoginKey: googleSub },
+  });
+
+  // Eğer kullanıcı yoksa yeni oluştur (isteğe bağlı)
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email,
+        name,
+        gmailLoginKey: googleSub!,
+        role: "USER",
+        appEnvironment: "PHONE",
+      },
+    });
+  }
+
+  // JWT payload ve cookie ayarları
+  const payload = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    surname: user.surname,
+    role: user.role,
+  };
+
+  const token = req.jwt.sign(payload);
+
+  reply.setCookie("access_token", token, {
+    path: "/",
+    httpOnly: true,
+    secure: true,
+    sameSite: "strict",
+  });
+
+  return { accessToken: token };
+};
+
 export const loginUserWithEmailPassword = async (
   req: FastifyRequest,
   reply: FastifyReply,
@@ -141,7 +256,6 @@ export const loginUserWithEmailPassword = async (
   const user = await prisma.user.findUnique({
     where: {
       email: email,
-      password,
     },
   });
   const isMatch = user && (await bcrypt.compare(password, user.password!));
@@ -154,6 +268,7 @@ export const loginUserWithEmailPassword = async (
     id: user.id,
     email: user.email,
     name: user.name,
+    surname: user.surname,
     role: user.role,
   };
   const token = req.jwt.sign(payload);

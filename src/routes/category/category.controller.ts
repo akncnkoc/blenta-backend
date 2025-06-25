@@ -169,6 +169,35 @@ export const categoryQuestionCompleted = async (
   }
 };
 
+export const likeCategory = async (
+  req: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const userId = req.user.id;
+  const { id } = req.params as { id: string };
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      var category = await tx.category.findFirst({ where: { id: id } });
+      if (!category) {
+        return { code: 404, error: { message: "Category not found" } };
+      }
+
+      const createLikedCategory = await tx.userLikedQuestion.create({
+        data: {
+          userId,
+          questionId: id,
+        },
+      });
+
+      return { likedCategory: createLikedCategory };
+    });
+
+    reply.code(201).send(result.likedCategory);
+  } catch (error) {
+    reply.code(500).send({ message: "Internal Server Error", error });
+  }
+};
+
 export const deleteCategory = async (
   req: FastifyRequest,
   reply: FastifyReply,

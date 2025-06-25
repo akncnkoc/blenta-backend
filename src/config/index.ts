@@ -3,6 +3,6 @@ dotenv.config();
 
 export const config = {
   port: process.env.PORT || 3000,
-  jwtSecret: process.env.JWT_SECRET || "super-secret-key",
+  jwtSecret: process.env.JWT_SECRET || "blenta-appi-key",
   dbUrl: process.env.DATABASE_URL || "",
 };

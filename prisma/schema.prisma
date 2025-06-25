@@ -24,19 +24,22 @@ model User {
   username              String?                 @unique
   email                 String                  @unique
   password              String?
-  gmailLoginKey         String?
-  icloudLoginKey        String?
+  gmailLoginKey         String?                 @unique
+  icloudLoginKey        String?                 @unique
   referenceCode         String?
   isPaidMembership      Boolean                 @default(false)
   paidMembershipKey     String?
   role                  Role                    @default(USER)
-  createdAt             DateTime                @default(now())
+  onesignalKey          String?
+  appEnvironment        AppEnvironment
   userAgreements        UserAgreement[]
   userOneTimeCodes      UserOneTimeCode[]
   likedQuestions        UserLikedQuestion[]
   userAnsweredQuestions UserAnsweredQuestions[]
   userViewedQuestions   UserViewedQuestion[]
-  appEnvironment        AppEnvironment
+  userLikedCategories   UserLikedCategory[]
+
+  createdAt DateTime @default(now())
 
   @@map("users")
 }
@@ -80,37 +83,50 @@ model Category {
   culture                 String
   color                   String                  @default("white")
   type                    String // general | ref |  premimum
-  userCompletedCategories UserCompletedCategory[]
-  parentCategory          Category?               @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
-  childCategories         Category[]              @relation("CategoryToCategory")
-  questions               Question[]
   isPremiumCat            Boolean                 @default(false)
   isRefCat                Boolean                 @default(false)
+  parentCategory          Category?               @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
+  userLikedCategories     UserLikedCategory[]
+  userCompletedCategories UserCompletedCategory[]
+  childCategories         Category[]              @relation("CategoryToCategory")
+  questions               Question[]
 
   @@map("categories")
 }
 
 model Question {
-  id           String   @id @default(uuid())
-  title        String
-  description  String
-  categoryId   String
-  culture      String
-  sort         Int      @default(1)
-  category     Category @relation(fields: [categoryId], references: [id])
-  isPremiumQue Boolean  @default(false)
-  isRefQue     Boolean  @default(false)
+  id                 String              @id @default(uuid())
+  title              String
+  description        String
+  categoryId         String
+  culture            String
+  sort               Int                 @default(1)
+  category           Category            @relation(fields: [categoryId], references: [id])
+  isPremiumQue       Boolean             @default(false)
+  isRefQue           Boolean             @default(false)
+  userLikedQuestions UserLikedQuestion[]
 
   @@map("questions")
 }
 
 model UserLikedQuestion {
-  id         String @id @default(uuid())
+  id         String   @id @default(uuid())
   userId     String
   questionId String
-  user       User   @relation(fields: [userId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+  question   Question @relation(fields: [questionId], references: [id])
 
   @@map("user_liked_questions")
+}
+
+model UserLikedCategory {
+  id         String   @id @default(uuid())
+  userId     String
+  categoryId String
+  user       User     @relation(fields: [userId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@map("user_liked_categories")
 }
 
 model UserViewedQuestion {
