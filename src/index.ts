@@ -1,3 +1,4 @@
+/// <reference path="./types/fastify-jwt.d.ts" />
 import Fastify from "fastify";
 import errorHandler from "./plugins/error-handler";
 import fastifySwagger from "@fastify/swagger";
@@ -12,8 +13,6 @@ import { QuestionSchema } from "./routes/question/question.schema";
 import { userSchemas } from "./routes/user/user.schemas";
 import fCookie from "@fastify/cookie";
 import * as OneSignal from "@onesignal/node-onesignal";
-import FastifyVite from "@fastify/vite";
-import path from "path";
 
 const fastify = Fastify({ logger: true });
 const start = async () => {
@@ -27,15 +26,6 @@ const start = async () => {
         },
       },
       hideUntagged: true,
-    });
-    // await fastify.register(FastifyVite, {
-    //   root: path.resolve(__dirname), // where to look for vite.config.js
-    //   dev: process.argv.includes("--dev"),
-    //   spa: true,
-    // });
-
-    fastify.get("/", (req, reply) => {
-      return reply.html();
     });
 
     await fastify.register(fastifySwaggerUi, {
@@ -58,9 +48,9 @@ const start = async () => {
     }
 
     fastify.register(jwtPlugin);
-    fastify.addHook("preHandler", (req, res, next) => {
-      req.jwt = fastify.jwt;
-      return next();
+    (fastify as any).addHook("preHandler", (req, _, next) => {
+      (req as any).jwt = fastify.jwt;
+      next();
     });
     // cookies
     fastify.register(fCookie, {
@@ -81,26 +71,19 @@ const start = async () => {
         "os_v2_app_xbbswfn2vnfwlckdcon426rr4rbxgeikxqme5buyydorgcpwil7gbqp52bsb3m22muoztiyvjijlt35hf6sm6iwphx5ymgxtcnwebpy",
     });
     const client = new OneSignal.DefaultApi(configuration);
-    client.createNotification({
-      app_id: appId,
-      name: "Test Notification",
-      contents: {
-        en: "Test Notification Content",
-        tr: "Test Bildirim Icerigi",
-      },
-      headings: {
-        en: "Test Notification",
-        tr: "Test Bildirim",
-      },
-    });
-    // fastify.get(
-    //   "/private",
-    //   { preHandler: [fastify.authenticate] },
-    //   async () => {
-    //     return { secret: "you found it!" };
+    // client.createNotification({
+    //   app_id: appId,
+    //   name: "Test Notification",
+    //   contents: {
+    //     en: "Test Notification Content",
+    //     tr: "Test Bildirim Icerigi",
     //   },
-    // );
-    await fastify.vite.ready();
+    //   headings: {
+    //     en: "Test Notification",
+    //     tr: "Test Bildirim",
+    //   },
+    // });
+
     await fastify.listen({ port: Number(config.port) });
     console.log(`🚀 Server running at http://localhost:${config.port}`);
   } catch (err) {

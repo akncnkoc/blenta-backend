@@ -21,6 +21,6 @@ declare module "@fastify/jwt" {
 
 declare module "fastify" {
   interface FastifyRequest {
-    jwt: JWT; // ✅ type exists now
+    jwt: JWT;
   }
 }
