@@ -13,8 +13,14 @@ import { QuestionSchema } from "./routes/question/question.schema";
 import { userSchemas } from "./routes/user/user.schemas";
 import fCookie from "@fastify/cookie";
 import * as OneSignal from "@onesignal/node-onesignal";
+import {
+  jsonSchemaTransform,
+  serializerCompiler,
+  validatorCompiler,
+  ZodTypeProvider,
+} from "fastify-type-provider-zod";
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>();
 const start = async () => {
   try {
     await fastify.register(fastifySwagger, {
@@ -24,8 +30,24 @@ const start = async () => {
           description: "API documentation",
           version: "0.0.1",
         },
+        components: {
+          securitySchemes: {
+            BearerAuth: {
+              type: "http",
+              scheme: "bearer",
+              bearerFormat: "JWT",
+            },
+          },
+        },
+        security: [
+          {
+            BearerAuth: [],
+          },
+        ],
       },
-      hideUntagged: true,
+      transform: jsonSchemaTransform,
+
+      hideUntagged: false,
     });
 
     await fastify.register(fastifySwaggerUi, {
@@ -34,18 +56,18 @@ const start = async () => {
         docExpansion: "none",
       },
     });
-    fastify.addSchema({
-      $id: "Category",
-      ...CategorySchema,
-    });
-    fastify.addSchema({
-      $id: "Question",
-      ...QuestionSchema,
-    });
-
-    for (let schema of [...userSchemas]) {
-      fastify.addSchema(schema);
-    }
+    // fastify.addSchema({
+    //   $id: "Category",
+    //   ...CategorySchema,
+    // });
+    // fastify.addSchema({
+    //   $id: "Question",
+    //   ...QuestionSchema,
+    // });
+    //
+    // for (let schema of [...userSchemas]) {
+    //   fastify.addSchema(schema);
+    // }
 
     fastify.register(jwtPlugin);
     (fastify as any).addHook("preHandler", (req, _, next) => {
@@ -59,11 +81,11 @@ const start = async () => {
     });
     fastify.register(errorHandler);
     fastify.register(userRoutes, { prefix: "/user" });
-    fastify.register(categoryRoutes, { prefix: "/category" });
-    fastify.register(questionRoutes, { prefix: "/question" });
-    fastify.get("/healthcheck", (req, res) => {
-      res.send({ message: "Success" });
-    });
+    // fastify.register(categoryRoutes, { prefix: "/category" });
+    // fastify.register(questionRoutes, { prefix: "/question" });
+    // fastify.get("/healthcheck", (req, res) => {
+    //   res.send({ message: "Success" });
+    // });
     var appId = "b8432b15-baab-4b65-8943-139bcd7a31e4";
     const configuration = OneSignal.createConfiguration({
       organizationApiKey: "",
@@ -83,6 +105,9 @@ const start = async () => {
     //     tr: "Test Bildirim",
     //   },
     // });
+
+    fastify.setValidatorCompiler(validatorCompiler);
+    fastify.setSerializerCompiler(serializerCompiler);
 
     await fastify.listen({ port: Number(config.port) });
     console.log(`🚀 Server running at http://localhost:${config.port}`);

@@ -1,15 +1,13 @@
 import nodemailer from "nodemailer";
 
 export async function getMailClient() {
-  const account = await nodemailer.createTestAccount();
-
   const transporter = nodemailer.createTransport({
-    host: "smtp.ethereal.email",
+    host: "smtp.gmail.com",
     port: 587,
     secure: false,
     auth: {
-      user: account.user,
-      pass: account.pass,
+      user: "info@blenta.app",
+      pass: "dXbCUJFgPyAS2dQ*12",
     },
   });
 
