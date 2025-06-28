@@ -8,9 +8,6 @@ import { config } from "./config";
 import jwtPlugin from "./plugins/jwt";
 import questionRoutes from "./routes/question/question.routes";
 import categoryRoutes from "./routes/category/category.routes";
-import { CategorySchema } from "./routes/category/category.schema";
-import { QuestionSchema } from "./routes/question/question.schema";
-import { userSchemas } from "./routes/user/user.schemas";
 import fCookie from "@fastify/cookie";
 import * as OneSignal from "@onesignal/node-onesignal";
 import {
@@ -49,6 +46,8 @@ const start = async () => {
 
       hideUntagged: false,
     });
+    fastify.setValidatorCompiler(validatorCompiler);
+    fastify.setSerializerCompiler(serializerCompiler);
 
     await fastify.register(fastifySwaggerUi, {
       routePrefix: "/docs",
@@ -81,11 +80,11 @@ const start = async () => {
     });
     fastify.register(errorHandler);
     fastify.register(userRoutes, { prefix: "/user" });
-    // fastify.register(categoryRoutes, { prefix: "/category" });
-    // fastify.register(questionRoutes, { prefix: "/question" });
-    // fastify.get("/healthcheck", (req, res) => {
-    //   res.send({ message: "Success" });
-    // });
+    fastify.register(categoryRoutes, { prefix: "/category" });
+    fastify.register(questionRoutes, { prefix: "/question" });
+    fastify.get("/healthcheck", (req, res) => {
+      res.send({ message: "Success" });
+    });
     var appId = "b8432b15-baab-4b65-8943-139bcd7a31e4";
     const configuration = OneSignal.createConfiguration({
       organizationApiKey: "",
@@ -105,9 +104,6 @@ const start = async () => {
     //     tr: "Test Bildirim",
     //   },
     // });
-
-    fastify.setValidatorCompiler(validatorCompiler);
-    fastify.setSerializerCompiler(serializerCompiler);
 
     await fastify.listen({ port: Number(config.port) });
     console.log(`🚀 Server running at http://localhost:${config.port}`);

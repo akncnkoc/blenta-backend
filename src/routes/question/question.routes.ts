@@ -1,41 +1,367 @@
 import { FastifyInstance } from "fastify";
-import {
-  createQuestion,
-  deleteQuestion,
-  getCategoryQuestions,
-  getQuestion,
-  likeQuestion,
-  questionViewed,
-  unlikeQuestion,
-  updateQuestion,
-} from "./question.controller";
-import {
-  createQuestionSchema,
-  deleteQuestionSchema,
-  getCategoryQuestionsSchema,
-  getQuestionSchema,
-  updateQuestionSchema,
-} from "./question.schema";
+import { ZodTypeProvider } from "fastify-type-provider-zod";
+import z from "zod/v4";
+import { PrismaClient } from "@prisma/client";
+const prisma = new PrismaClient();
 
 export default async function questionRoutes(fastify: FastifyInstance) {
-  // fastify.get(
-  //   "/category/:categoryId",
-  //   {
-  //     schema: getCategoryQuestionsSchema,
-  //     preHandler: [fastify.authenticate],
-  //   },
-  //   getCategoryQuestions,
-  // );
-  // fastify.get(
-  //   "/:id",
-  //
-  //   { schema: getQuestionSchema, preHandler: [fastify.authenticate] },
-  //   getQuestion,
-  // );
-  // fastify.post("", { schema: createQuestionSchema }, createQuestion);
-  // fastify.put("/:id", { schema: updateQuestionSchema }, updateQuestion);
-  // fastify.put("/:id/questionReaded", questionViewed);
-  // fastify.put("/:id/like-question", likeQuestion);
-  // fastify.put("/:id/unlike-question", unlikeQuestion);
-  // fastify.delete("/:id", { schema: deleteQuestionSchema }, deleteQuestion);
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/category/:categoryId",
+    method: "GET",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Question"],
+      summary: "Get Category Questions",
+      params: z.object({
+        categoryId: z.string().nonempty(),
+      }),
+      querystring: z.object({
+        page: z.number().optional(),
+        limit: z.number().optional(),
+      }),
+    },
+    handler: async (req, reply) => {
+      var userId = req.user.id;
+      const { categoryId } = req.params;
+      const { page = 1, limit = 10 } = req.query;
+      const skip = (page - 1) * limit;
+
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          const user = await tx.user.findFirst({ where: { id: userId } });
+          if (!user) return { code: 404, error: { message: "User not found" } };
+
+          const category = await tx.category.findFirst({
+            where: { id: categoryId },
+          });
+          if (!category)
+            return { code: 404, error: { message: "Category not found" } };
+
+          if (category.isPremiumCat && !user.isPaidMembership) {
+            return {
+              code: 409,
+              error: {
+                message: "This user cannot access this premium category",
+              },
+            };
+          }
+          if (
+            category.isRefCat &&
+            (!user.referenceCode || user.referenceCode == "")
+          ) {
+            return {
+              code: 409,
+              error: {
+                message: "This user cannot access this referenced category",
+              },
+            };
+          }
+
+          const [questions, total] = await Promise.all([
+            tx.question.findMany({
+              where: { categoryId },
+              skip,
+              take: limit,
+              orderBy: { sort: "asc" },
+            }),
+            tx.question.count({
+              where: { categoryId },
+            }),
+          ]);
+
+          return {
+            questions,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+          };
+        });
+
+        reply.code(200).send(result);
+      } catch (error) {
+        console.error("getCategoryQuestions error:", error);
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/:id",
+    method: "GET",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Question"],
+      summary: "Get Question",
+      params: z.object({
+        id: z.string().nonempty(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const { id } = req.params;
+
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          var question = await tx.question.findFirst({ where: { id: id } });
+          if (!question) {
+            return { code: 404, error: { message: "Question not found" } };
+          }
+          var nextQuestion = await tx.question.findFirst({
+            where: { sort: question.sort + 1 },
+          });
+
+          var questionCreated = {
+            ...question,
+            nextQuestionId: nextQuestion?.id,
+          };
+
+          return { question: questionCreated };
+        });
+
+        reply.code(201).send(result.question);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    method: "POST",
+    url: "/",
+    schema: {
+      tags: ["Question"],
+      summary: "Create A Question",
+      body: z.object({
+        title: z.string().nonempty(),
+        description: z.string().nonempty(),
+        categoryId: z.string().nonempty(),
+        culture: z.string().nonempty(),
+        sort: z.number(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const { title, description, categoryId, sort, culture } = req.body;
+
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          var category = await tx.category.findFirst({
+            where: { id: categoryId },
+          });
+          if (!category) {
+            return { code: 404, error: { message: "Category not found" } };
+          }
+
+          const createdQuestion = await tx.question.create({
+            data: {
+              title,
+              description,
+              culture,
+              categoryId,
+              sort,
+            },
+          });
+
+          return { question: createdQuestion };
+        });
+
+        reply.code(201).send(result.question);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/:id",
+    method: "PUT",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Question"],
+      summary: "Update A Question",
+      params: z.object({
+        id: z.string().nonempty(),
+      }),
+      body: z.object({
+        title: z.string().nonempty(),
+        description: z.string().nonempty(),
+        categoryId: z.string().nonempty(),
+        culture: z.string().nonempty(),
+        sort: z.number(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const { id } = req.params;
+      const { title, description, categoryId, sort, culture } = req.body;
+
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          var question = await tx.question.findFirst({ where: { id: id } });
+          if (!question) {
+            return { code: 404, error: { message: "Question not found" } };
+          }
+          var category = await tx.category.findFirst({
+            where: { id: categoryId },
+          });
+          if (!category) {
+            return { code: 404, error: { message: "Category not found" } };
+          }
+
+          const updatedQuestion = await tx.question.update({
+            where: { id },
+            data: {
+              title,
+              description,
+              culture,
+              categoryId,
+              sort,
+            },
+          });
+
+          return { question: updatedQuestion };
+        });
+
+        reply.code(201).send(result.question);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/:id/questionReaded",
+    method: "PUT",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Question"],
+      summary: "User read a question",
+      params: z.object({
+        id: z.string().nonempty(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+      const { id } = req.params;
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          var question = await tx.question.findFirst({ where: { id: id } });
+          if (!question) {
+            return { code: 404, error: { message: "Question not found" } };
+          }
+
+          const createViewedQuestion = await tx.userViewedQuestion.create({
+            data: {
+              userId,
+              questionId: id,
+            },
+          });
+
+          return { viewedQuestion: createViewedQuestion };
+        });
+
+        reply.code(201).send(result.viewedQuestion);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/:id/like-question",
+    method: "PUT",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Question"],
+      summary: "Like a question",
+      params: z.object({
+        id: z.string().nonempty(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+      const { id } = req.params;
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          var question = await tx.question.findFirst({ where: { id: id } });
+          if (!question) {
+            return { code: 404, error: { message: "Question not found" } };
+          }
+
+          const createLikedQuestion = await tx.userLikedQuestion.create({
+            data: {
+              userId,
+              questionId: id,
+            },
+          });
+
+          return { likedQuestion: createLikedQuestion };
+        });
+
+        reply.code(201).send(result.likedQuestion);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/:id/unlike-question",
+    method: "PUT",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Question"],
+      summary: "Unlike a question",
+      params: z.object({
+        id: z.string().nonempty(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+      const { id } = req.params;
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          var question = await tx.question.findFirst({ where: { id: id } });
+          if (!question) {
+            return { code: 404, error: { message: "Question not found" } };
+          }
+
+          const unlikedQuestion = await tx.userLikedQuestion.deleteMany({
+            where: { id: id, userId: userId },
+          });
+
+          return { unlikedQuestion };
+        });
+
+        reply.code(201).send(result.unlikedQuestion);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/:id",
+    method: "DELETE",
+
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Question"],
+      summary: "Delete a question",
+      params: z.object({
+        id: z.string().nonempty(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const { id } = req.params;
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          var question = await tx.question.findFirst({ where: { id: id } });
+          if (!question) {
+            return { code: 404, error: { message: "Question not found" } };
+          }
+          const deletedQuestion = await tx.question.delete({
+            where: { id },
+          });
+
+          return { question: deletedQuestion };
+        });
+
+        reply.code(201).send(result.question);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
 }

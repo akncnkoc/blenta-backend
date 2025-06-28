@@ -9,6 +9,7 @@ export async function getMailClient() {
       user: "info@blenta.app",
       pass: "dXbCUJFgPyAS2dQ*12",
     },
+    tls: { rejectUnauthorized: false },
   });
 
   return transporter;
