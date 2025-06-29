@@ -82,7 +82,6 @@ model Category {
   parentCategoryId        String? // optional FK field
   culture                 String
   color                   String                  @default("white")
-  type                    String // general | ref |  premimum
   isPremiumCat            Boolean                 @default(false)
   isRefCat                Boolean                 @default(false)
   parentCategory          Category?               @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])

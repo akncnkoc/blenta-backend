@@ -1,13 +1,4 @@
 import { FastifyInstance } from "fastify";
-import {
-  getUsers,
-  loginUserWithAppleToken,
-  loginUserWithEmailOtp,
-  loginUserWithEmailPassword,
-  loginUserWithGoogle as loginUserWithGoogleToken,
-  loginUserWithEmail as loginWithUserEmail,
-  updateUserInfo,
-} from "./user.controller";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import z from "zod/v4";
 import { PrismaClient } from "@prisma/client";
@@ -16,13 +7,72 @@ import {
   confirmationEmailEn,
   confirmationEmailTr,
 } from "../../lib/emails/confirmation-email";
-import nodemailer from "nodemailer";
 const prisma = new PrismaClient();
 import jsonwebtoken from "jsonwebtoken"; // NOT your app token, Apple's token decoder
-const SALT_ROUNDS = 10;
 
 export default async function userRoutes(fastify: FastifyInstance) {
-  fastify.get("/", { preHandler: [fastify.authenticate] }, getUsers);
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/me",
+    method: "GET",
+    schema: {
+      tags: ["User"],
+      summary: "Get current user",
+      response: {
+        401: z.object({ message: z.string() }),
+        200: z.object({
+          user: z
+            .object({
+              name: z.string().nullable(),
+              surname: z.string().nullable(),
+              email: z.string(),
+              likedQuestions: z.array(
+                z.object({
+                  id: z.string(),
+                  userId: z.string(),
+                  questionId: z.string(),
+                }),
+              ),
+              userAnsweredQuestions: z.array(
+                z.object({
+                  id: z.string(),
+                  userId: z.string(),
+                  questionId: z.string(),
+                }),
+              ),
+              userViewedQuestions: z.array(
+                z.object({
+                  id: z.string(),
+                  userId: z.string(),
+                  questionId: z.string(),
+                  viewedAt: z.date(),
+                }),
+              ),
+            })
+            .nullable(),
+        }),
+      },
+    },
+    preHandler: [fastify.authenticate],
+    handler: async (req, reply) => {
+      const { id } = req.user;
+
+      let user = await prisma.user.findUnique({
+        where: { id },
+        include: {
+          likedQuestions: true,
+          userAnsweredQuestions: true,
+          userLikedCategories: true,
+          userViewedQuestions: true,
+        },
+      });
+
+      if (!user) {
+        return reply.status(401).send({ message: "Unauthorized" });
+      }
+
+      return reply.status(200).send({ user });
+    },
+  });
 
   fastify.withTypeProvider<ZodTypeProvider>().route({
     method: "POST",
@@ -242,9 +292,55 @@ export default async function userRoutes(fastify: FastifyInstance) {
       return { accessToken: token };
     },
   });
-  // fastify.post(
-  //   "/updateUserInfo",
-  //   { preHandler: [fastify.authenticate] },
-  //   updateUserInfo,
-  // );
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/updateUserInfo",
+    method: "PUT",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["User"],
+      summary: "Update user info",
+      body: z.object({
+        name: z.string().max(50),
+        surname: z.string().max(50),
+      }),
+      response: {
+        200: z.object({ message: z.string() }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+
+      const { name, surname } = req.body;
+      try {
+        await prisma.$transaction(async (tx) => {
+          const user = await tx.user.findUnique({
+            where: { id: userId },
+          });
+
+          if (!user) {
+            throw new Error("UserNotFound");
+          }
+
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              name,
+              surname,
+            },
+          });
+        });
+
+        return reply.code(200).send({ message: "User updated" });
+      } catch (error) {
+        if (error instanceof Error && error.message === "UserNotFound") {
+          return reply.code(404).send({ message: "User not found" });
+        }
+
+        console.error("Update failed:", error);
+        return reply
+          .code(500)
+          .send({ message: "An error occurred during update" });
+      }
+    },
+  });
 }
