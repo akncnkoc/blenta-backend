@@ -105,7 +105,7 @@ const start = async () => {
     //   },
     // });
 
-    await fastify.listen({ port: Number(config.port) });
+    await fastify.listen({ port: Number(config.port), host: "0.0.0.0" });
     console.log(`🚀 Server running at http://localhost:${config.port}`);
   } catch (err) {
     fastify.log.error(err);
