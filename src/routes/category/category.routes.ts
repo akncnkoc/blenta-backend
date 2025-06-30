@@ -21,8 +21,8 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       tags: ["Category"],
       querystring: z.object({
         lang: z.string(),
-        page: z.number().min(1),
-        size: z.number().min(1).max(100),
+        page: z.string().min(1),
+        size: z.string().min(1).max(100),
       }),
       summary: "Get All Categories with Pagination",
       response: {
@@ -41,8 +41,8 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           ),
           meta: z.object({
             total: z.number(),
-            page: z.number(),
-            size: z.number(),
+            page: z.string(),
+            size: z.string(),
             pageCount: z.number(),
           }),
         }),
@@ -64,8 +64,8 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               where: {
                 culture: lang,
               },
-              skip: (page - 1) * size,
-              take: size,
+              skip: (Number(page) - 1) * Number(size),
+              take: Number(size),
               orderBy: { name: "asc" },
             }),
           ]);
@@ -76,7 +76,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               total,
               page,
               size,
-              pageCount: Math.ceil(total / size),
+              pageCount: Math.ceil(total / Number(size)),
             },
           };
         });

@@ -25,6 +25,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
               name: z.string().nullable(),
               surname: z.string().nullable(),
               email: z.string(),
+              phoneNumber: z.string().nullable(),
+              gender: z.boolean(),
+              age: z.string().nullable(),
               likedQuestions: z.array(
                 z.object({
                   id: z.string(),
@@ -106,13 +109,15 @@ export default async function userRoutes(fastify: FastifyInstance) {
             password: "",
             role: "USER",
             appEnvironment: "PHONE",
+            gender: true,
           },
         });
       }
 
-      const oneTimePassCode = String(
-        Math.floor(Math.random() * 1000000),
-      ).padStart(6, "0");
+      // const oneTimePassCode = String(
+      //   Math.floor(Math.random() * 1000000),
+      // ).padStart(6, "0");
+      const oneTimePassCode = String("123456");
 
       await prisma.userOneTimeCode.create({
         data: {
@@ -135,7 +140,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
       try {
         const result = await mail.sendMail(mailTemp);
-        fastify.log.info("Mail sent successfully:", result?.response);
+        console.log("Mail sent successfully:", result?.response);
       } catch (err) {
         console.log(err);
       }
@@ -155,7 +160,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         otpCode: z.string().max(6),
       }),
       response: {
-        200: z.object({ accessToken: z.string() }),
+        200: z.object({ accessToken: z.string(), isRegistered: z.boolean() }),
         400: z.object({ message: z.string() }),
         404: z.object({ message: z.string() }),
       },
@@ -164,6 +169,14 @@ export default async function userRoutes(fastify: FastifyInstance) {
       const { email, otpCode } = req.body;
       try {
         let token = "";
+        let payload = {} as {
+          id: string;
+          email: string;
+          name: string | null;
+          surname: string | null;
+          role: string;
+          isRegistered: boolean;
+        };
 
         await prisma.$transaction(async (tx) => {
           // Find the user by email
@@ -188,12 +201,13 @@ export default async function userRoutes(fastify: FastifyInstance) {
           }
 
           // Create JWT token
-          const payload = {
+          payload = {
             id: user.id,
             email: user.email,
             name: user.name,
             surname: user.surname,
             role: user.role,
+            isRegistered: user.isRegistered,
           };
 
           token = req.jwt.sign(payload);
@@ -207,7 +221,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
         });
 
         // Return token in response body
-        return reply.code(200).send({ accessToken: token });
+        return reply
+          .code(200)
+          .send({ accessToken: token, isRegistered: payload.isRegistered });
       } catch (error) {
         if (error instanceof Error) {
           if (error.message === "UserNotFound") {
@@ -225,8 +241,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
       }
     },
   });
-  // fastify.post("/loginUserWithEmailPassword", loginUserWithEmailPassword);
-  // fastify.post("/loginUserWithGoogleToken", loginUserWithGoogleToken);
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/loginUserWithAppleToken",
     method: "POST",
@@ -264,6 +278,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       if (!user) {
         user = await prisma.user.create({
           data: {
+            gender: true,
             icloudLoginKey: appleSub,
             email: email ?? `apple_${appleSub}@private.appleid.com`, // fallback mail
             name,
@@ -278,6 +293,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         name: user.name,
         surname: user.surname,
         role: user.role,
+        isRegistered: user.isRegistered,
       };
 
       const token = req.jwt.sign(payload);
@@ -302,6 +318,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
       body: z.object({
         name: z.string().max(50),
         surname: z.string().max(50),
+        age: z.string(),
+        phoneNumber: z.string(),
+        gender: z.boolean(),
       }),
       response: {
         200: z.object({ message: z.string() }),
@@ -310,7 +329,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
     handler: async (req, reply) => {
       const userId = req.user.id;
 
-      const { name, surname } = req.body;
+      const { name, surname, age, phoneNumber, gender } = req.body;
       try {
         await prisma.$transaction(async (tx) => {
           const user = await tx.user.findUnique({
@@ -326,6 +345,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
             data: {
               name,
               surname,
+              age,
+              phoneNumber,
+              gender,
+              isRegistered: true,
             },
           });
         });

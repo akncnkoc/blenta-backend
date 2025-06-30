@@ -2,14 +2,11 @@ import nodemailer from "nodemailer";
 
 export async function getMailClient() {
   const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
+    service: "gmail",
     auth: {
       user: "info@blenta.app",
-      pass: "dXbCUJFgPyAS2dQ*12",
+      pass: "mmec bpwi yihf mizx",
     },
-    tls: { rejectUnauthorized: false },
   });
 
   return transporter;

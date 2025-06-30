@@ -23,6 +23,10 @@ model User {
   surname               String?
   username              String?                 @unique
   email                 String                  @unique
+  phoneNumber           String?
+  age                   String?
+  gender                Boolean
+  isRegistered          Boolean                 @default(false)
   password              String?
   gmailLoginKey         String?                 @unique
   icloudLoginKey        String?                 @unique
