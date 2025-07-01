@@ -1,12 +1,4 @@
 import { FastifyInstance } from "fastify";
-import {
-  categoryQuestionCompleted,
-  createCategory,
-  deleteCategory,
-  getCategory,
-  likeCategory,
-  updateCategory,
-} from "./category.controller";
 import z from "zod/v4";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { PrismaClient } from "@prisma/client";

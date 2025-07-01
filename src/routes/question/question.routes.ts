@@ -16,15 +16,15 @@ export default async function questionRoutes(fastify: FastifyInstance) {
         categoryId: z.string().nonempty(),
       }),
       querystring: z.object({
-        page: z.number().optional(),
-        limit: z.number().optional(),
+        page: z.string().optional(),
+        limit: z.string().optional(),
       }),
     },
     handler: async (req, reply) => {
       var userId = req.user.id;
       const { categoryId } = req.params;
       const { page = 1, limit = 10 } = req.query;
-      const skip = (page - 1) * limit;
+      const skip = (Number(page) - 1) * Number(limit);
 
       try {
         const result = await prisma.$transaction(async (tx) => {
@@ -61,7 +61,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
             tx.question.findMany({
               where: { categoryId },
               skip,
-              take: limit,
+              take: Number(limit),
               orderBy: { sort: "asc" },
             }),
             tx.question.count({
@@ -74,7 +74,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
             total,
             page,
             limit,
-            totalPages: Math.ceil(total / limit),
+            totalPages: Math.ceil(total / Number(limit)),
           };
         });
 
@@ -280,6 +280,12 @@ export default async function questionRoutes(fastify: FastifyInstance) {
           if (!question) {
             return { code: 404, error: { message: "Question not found" } };
           }
+          var alreadyLiked = await tx.userLikedQuestion.findFirst({
+            where: { questionId: id, userId },
+          });
+          if (alreadyLiked) {
+            return { code: 409, error: { message: "Question already liked" } };
+          }
 
           const createLikedQuestion = await tx.userLikedQuestion.create({
             data: {
@@ -291,7 +297,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
           return { likedQuestion: createLikedQuestion };
         });
 
-        reply.code(201).send(result.likedQuestion);
+        reply.code(result.code!).send(result);
       } catch (error) {
         reply.code(500).send({ message: "Internal Server Error", error });
       }
@@ -319,13 +325,13 @@ export default async function questionRoutes(fastify: FastifyInstance) {
           }
 
           const unlikedQuestion = await tx.userLikedQuestion.deleteMany({
-            where: { id: id, userId: userId },
+            where: { questionId: id, userId: userId },
           });
 
           return { unlikedQuestion };
         });
 
-        reply.code(201).send(result.unlikedQuestion);
+        reply.code(result.code!).send(result);
       } catch (error) {
         reply.code(500).send({ message: "Internal Server Error", error });
       }
