@@ -19,15 +19,15 @@ async function questionRoutes(fastify) {
                 categoryId: v4_1.default.string().nonempty(),
             }),
             querystring: v4_1.default.object({
-                page: v4_1.default.number().optional(),
-                limit: v4_1.default.number().optional(),
+                page: v4_1.default.string().optional(),
+                limit: v4_1.default.string().optional(),
             }),
         },
         handler: async (req, reply) => {
             var userId = req.user.id;
             const { categoryId } = req.params;
             const { page = 1, limit = 10 } = req.query;
-            const skip = (page - 1) * limit;
+            const skip = (Number(page) - 1) * Number(limit);
             try {
                 const result = await prisma.$transaction(async (tx) => {
                     const user = await tx.user.findFirst({ where: { id: userId } });
@@ -59,7 +59,7 @@ async function questionRoutes(fastify) {
                         tx.question.findMany({
                             where: { categoryId },
                             skip,
-                            take: limit,
+                            take: Number(limit),
                             orderBy: { sort: "asc" },
                         }),
                         tx.question.count({
@@ -71,7 +71,7 @@ async function questionRoutes(fastify) {
                         total,
                         page,
                         limit,
-                        totalPages: Math.ceil(total / limit),
+                        totalPages: Math.ceil(total / Number(limit)),
                     };
                 });
                 reply.code(200).send(result);
@@ -266,6 +266,12 @@ async function questionRoutes(fastify) {
                     if (!question) {
                         return { code: 404, error: { message: "Question not found" } };
                     }
+                    var alreadyLiked = await tx.userLikedQuestion.findFirst({
+                        where: { questionId: id, userId },
+                    });
+                    if (alreadyLiked) {
+                        return { code: 409, error: { message: "Question already liked" } };
+                    }
                     const createLikedQuestion = await tx.userLikedQuestion.create({
                         data: {
                             userId,
@@ -274,7 +280,7 @@ async function questionRoutes(fastify) {
                     });
                     return { likedQuestion: createLikedQuestion };
                 });
-                reply.code(201).send(result.likedQuestion);
+                reply.code(result.code).send(result);
             }
             catch (error) {
                 reply.code(500).send({ message: "Internal Server Error", error });
@@ -302,11 +308,11 @@ async function questionRoutes(fastify) {
                         return { code: 404, error: { message: "Question not found" } };
                     }
                     const unlikedQuestion = await tx.userLikedQuestion.deleteMany({
-                        where: { id: id, userId: userId },
+                        where: { questionId: id, userId: userId },
                     });
                     return { unlikedQuestion };
                 });
-                reply.code(201).send(result.unlikedQuestion);
+                reply.code(result.code).send(result);
             }
             catch (error) {
                 reply.code(500).send({ message: "Internal Server Error", error });
