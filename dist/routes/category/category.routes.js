@@ -129,6 +129,21 @@ async function categoryRoutes(fastify) {
             params: v4_1.default.object({
                 id: v4_1.default.string().nonempty(),
             }),
+            response: {
+                200: v4_1.default.object({
+                    id: v4_1.default.string(),
+                    name: v4_1.default.string(),
+                    description: v4_1.default.string().nullable(),
+                    parentCategoryId: v4_1.default.string().nullable(),
+                    culture: v4_1.default.string(),
+                    color: v4_1.default.string(),
+                    isPremiumCat: v4_1.default.boolean(),
+                    isRefCat: v4_1.default.boolean(),
+                    questionCount: v4_1.default.number(),
+                    type: v4_1.default.enum(["QUESTION", "TEST"]),
+                }),
+                500: v4_1.default.object({ message: v4_1.default.string() }),
+            },
         },
         handler: async (req, reply) => {
             const userId = req.user.id;
@@ -178,7 +193,7 @@ async function categoryRoutes(fastify) {
                 });
             }
             catch (error) {
-                reply.code(500).send({ message: "Internal Server Error", error });
+                reply.code(500).send({ message: "Internal Server Error" + error });
             }
         },
     });
@@ -415,6 +430,64 @@ async function categoryRoutes(fastify) {
                         where: { categoryId: id },
                     });
                     return { category: deletedCategory };
+                });
+                if (result.error) {
+                    reply.code(result.code).send(result.error);
+                    return;
+                }
+                reply.code(200).send(result.category);
+            }
+            catch (error) {
+                reply.code(500).send({ message: "Internal Server Error", error });
+            }
+        },
+    });
+    fastify.withTypeProvider().route({
+        url: "/:id/addRefCode",
+        method: "POST",
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ["Category"],
+            summary: "Add reference category for user",
+            params: v4_1.default.object({
+                id: v4_1.default.string().nonempty(),
+            }),
+            body: v4_1.default.object({
+                refCode: v4_1.default.string().nonempty(),
+            }),
+        },
+        handler: async (req, reply) => {
+            const userId = req.user.id;
+            const { id } = req.params;
+            const { refCode } = req.body;
+            try {
+                const result = await prisma.$transaction(async (tx) => {
+                    const category = await tx.category.findUnique({ where: { id } });
+                    if (!category) {
+                        return { code: 404, error: { message: "Category not found" } };
+                    }
+                    if (category.referenceCode != refCode) {
+                        return {
+                            code: 409,
+                            error: { message: "Reference code is not match" },
+                        };
+                    }
+                    var alreadyExistsReference = await tx.userReferencedCategory.findFirst({
+                        where: { categoryId: id, userId },
+                    });
+                    if (alreadyExistsReference) {
+                        return {
+                            code: 409,
+                            error: { message: "Reference code already exists" },
+                        };
+                    }
+                    const referenceCategory = await tx.userReferencedCategory.create({
+                        data: {
+                            userId: userId,
+                            categoryId: category.id,
+                        },
+                    });
+                    return { category: referenceCategory };
                 });
                 if (result.error) {
                     reply.code(result.code).send(result.error);

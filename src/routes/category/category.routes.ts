@@ -140,6 +140,21 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       params: z.object({
         id: z.string().nonempty(),
       }),
+      response: {
+        200: z.object({
+          id: z.string(),
+          name: z.string(),
+          description: z.string().nullable(),
+          parentCategoryId: z.string().nullable(),
+          culture: z.string(),
+          color: z.string(),
+          isPremiumCat: z.boolean(),
+          isRefCat: z.boolean(),
+          questionCount: z.number(),
+          type: z.enum(["QUESTION", "TEST"]),
+        }),
+        500: z.object({ message: z.string() }),
+      },
     },
     handler: async (req, reply) => {
       const userId = req.user.id;
@@ -198,7 +213,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           questionCount: result.questionCount,
         });
       } catch (error) {
-        reply.code(500).send({ message: "Internal Server Error", error });
+        reply.code(500).send({ message: "Internal Server Error" + error });
       }
     },
   });
@@ -470,6 +485,69 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           });
 
           return { category: deletedCategory };
+        });
+
+        if (result.error) {
+          reply.code(result.code).send(result.error);
+          return;
+        }
+
+        reply.code(200).send(result.category);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/:id/addRefCode",
+    method: "POST",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Category"],
+      summary: "Add reference category for user",
+      params: z.object({
+        id: z.string().nonempty(),
+      }),
+      body: z.object({
+        refCode: z.string().nonempty(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+      const { id } = req.params;
+      const { refCode } = req.body;
+
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          const category = await tx.category.findUnique({ where: { id } });
+          if (!category) {
+            return { code: 404, error: { message: "Category not found" } };
+          }
+          if (category.referenceCode != refCode) {
+            return {
+              code: 409,
+              error: { message: "Reference code is not match" },
+            };
+          }
+          var alreadyExistsReference =
+            await tx.userReferencedCategory.findFirst({
+              where: { categoryId: id, userId },
+            });
+          if (alreadyExistsReference) {
+            return {
+              code: 409,
+              error: { message: "Reference code already exists" },
+            };
+          }
+
+          const referenceCategory = await tx.userReferencedCategory.create({
+            data: {
+              userId: userId,
+              categoryId: category.id,
+            },
+          });
+
+          return { category: referenceCategory };
         });
 
         if (result.error) {
