@@ -32,6 +32,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               isRefCat: z.boolean(),
               questionCount: z.number(),
               isCategoryLiked: z.boolean(),
+              type: z.enum(["QUESTION", "TEST"]),
             }),
           ),
           meta: z.object({
@@ -71,7 +72,10 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
                 },
               }),
               tx.category.findMany({
-                where: whereClause,
+                where: {
+                  ...whereClause,
+                  parentCategoryId: null,
+                },
                 skip: (Number(page) - 1) * Number(size),
                 take: Number(size),
                 orderBy: { name: "asc" },
@@ -427,7 +431,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           return { message: "Like removed" };
         });
 
-        reply.code(201).send(result.message);
+        reply.code(200).send(result.message);
       } catch (error) {
         reply.code(500).send({ message: "Internal Server Error", error });
       }

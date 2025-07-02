@@ -29,6 +29,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
               gender: z.boolean(),
               age: z.string().nullable(),
               isPaidMembership: z.boolean(),
+              isRegistered: z.boolean(),
               likedQuestions: z.array(
                 z.object({
                   id: z.string(),

@@ -29,6 +29,7 @@ async function userRoutes(fastify) {
                         gender: v4_1.default.boolean(),
                         age: v4_1.default.string().nullable(),
                         isPaidMembership: v4_1.default.boolean(),
+                        isRegistered: v4_1.default.boolean(),
                         likedQuestions: v4_1.default.array(v4_1.default.object({
                             id: v4_1.default.string(),
                             userId: v4_1.default.string(),
