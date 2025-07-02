@@ -16,10 +16,17 @@ import {
   validatorCompiler,
   ZodTypeProvider,
 } from "fastify-type-provider-zod";
+import fastifyCors from "@fastify/cors";
+import adminRoutes from "./routes/admin/admin.routes";
 
 const fastify = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>();
 const start = async () => {
   try {
+    fastify.register(fastifyCors, {
+      origin: "*", // allow all origins
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"], // allowed HTTP methods
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"], // headers you want to allow
+    });
     await fastify.register(fastifySwagger, {
       openapi: {
         info: {
@@ -55,18 +62,6 @@ const start = async () => {
         docExpansion: "none",
       },
     });
-    // fastify.addSchema({
-    //   $id: "Category",
-    //   ...CategorySchema,
-    // });
-    // fastify.addSchema({
-    //   $id: "Question",
-    //   ...QuestionSchema,
-    // });
-    //
-    // for (let schema of [...userSchemas]) {
-    //   fastify.addSchema(schema);
-    // }
 
     fastify.register(jwtPlugin);
     (fastify as any).addHook("preHandler", (req, _, next) => {
@@ -82,6 +77,7 @@ const start = async () => {
     fastify.register(userRoutes, { prefix: "/user" });
     fastify.register(categoryRoutes, { prefix: "/category" });
     fastify.register(questionRoutes, { prefix: "/question" });
+    fastify.register(adminRoutes, { prefix: "/admin" });
     fastify.get("/healthcheck", (req, res) => {
       res.send({ message: "Success" });
     });

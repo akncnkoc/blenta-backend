@@ -17,6 +17,11 @@ enum AppEnvironment {
   TABLET
 }
 
+enum CategoryType {
+  TEST
+  QUESTION
+}
+
 model User {
   id                    String                  @id @default(uuid())
   name                  String?
@@ -30,7 +35,6 @@ model User {
   password              String?
   gmailLoginKey         String?                 @unique
   icloudLoginKey        String?                 @unique
-  referenceCode         String?
   isPaidMembership      Boolean                 @default(false)
   paidMembershipKey     String?
   role                  Role                    @default(USER)
@@ -43,7 +47,8 @@ model User {
   userViewedQuestions   UserViewedQuestion[]
   userLikedCategories   UserLikedCategory[]
 
-  createdAt DateTime @default(now())
+  createdAt                DateTime                 @default(now())
+  userReferencedCategories UserReferencedCategory[]
 
   @@map("users")
 }
@@ -54,7 +59,7 @@ model UserOneTimeCode {
   code      String
   expiresAt DateTime @default(now()) // 10Minute
   createdAt DateTime @default(now())
-  User      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 
   @@map("user_one_time_codes")
 }
@@ -80,21 +85,34 @@ model UserAgreement {
 }
 
 model Category {
-  id                      String                  @id @default(uuid())
-  name                    String
-  description             String?
-  parentCategoryId        String? // optional FK field
-  culture                 String
-  color                   String                  @default("white")
-  isPremiumCat            Boolean                 @default(false)
-  isRefCat                Boolean                 @default(false)
-  parentCategory          Category?               @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
-  userLikedCategories     UserLikedCategory[]
-  userCompletedCategories UserCompletedCategory[]
-  childCategories         Category[]              @relation("CategoryToCategory")
-  questions               Question[]
+  id                       String                   @id @default(uuid())
+  name                     String
+  description              String?
+  parentCategoryId         String? // optional FK field
+  culture                  String
+  color                    String                   @default("white")
+  isPremiumCat             Boolean                  @default(false)
+  isRefCat                 Boolean                  @default(false)
+  type                     CategoryType             @default(QUESTION)
+  parentCategory           Category?                @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
+  referenceCode            String?
+  userLikedCategories      UserLikedCategory[]
+  userCompletedCategories  UserCompletedCategory[]
+  childCategories          Category[]               @relation("CategoryToCategory")
+  questions                Question[]
+  userReferencedCategories UserReferencedCategory[]
 
   @@map("categories")
+}
+
+model UserReferencedCategory {
+  id         String   @id @default(uuid())
+  categoryId String
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@map("user_referenced_categories")
 }
 
 model Question {
@@ -160,4 +178,14 @@ model UserAnsweredQuestions {
   user       User   @relation(fields: [userId], references: [id])
 
   @@map("user_answered_questions")
+}
+
+model Admin {
+  id       String @id @default(uuid())
+  name     String
+  surname  String
+  email    String @unique
+  password String
+
+  @@map("admins")
 }

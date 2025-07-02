@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import z from "zod/v4";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 export default async function categoryRoutes(fastify: FastifyInstance) {
@@ -15,6 +15,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         lang: z.string(),
         page: z.string().min(1),
         size: z.string().min(1).max(100),
+        search: z.string().optional().nullable(), // 🔍 add search param
       }),
       summary: "Get All Categories with Pagination",
       response: {
@@ -29,6 +30,8 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               color: z.string(),
               isPremiumCat: z.boolean(),
               isRefCat: z.boolean(),
+              questionCount: z.number(),
+              isCategoryLiked: z.boolean(),
             }),
           ),
           meta: z.object({
@@ -42,28 +45,72 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       },
     },
     handler: async (req, reply) => {
-      const { lang, page, size } = req.query;
+      const userId = req.user.id;
+      const { lang, page, size, search } = req.query;
 
       try {
         const result = await prisma.$transaction(async (tx) => {
-          const [total, categories] = await Promise.all([
-            tx.category.count({
-              where: {
-                culture: lang,
-              },
-            }),
-            tx.category.findMany({
-              where: {
-                culture: lang,
-              },
-              skip: (Number(page) - 1) * Number(size),
-              take: Number(size),
-              orderBy: { name: "asc" },
-            }),
-          ]);
+          const whereClause = {
+            culture: lang,
+            ...(search
+              ? {
+                  name: {
+                    contains: search,
+                    mode: Prisma.QueryMode.insensitive,
+                  },
+                }
+              : {}),
+          };
+
+          const [total, categories, userLikedCategories, questionCounts] =
+            await Promise.all([
+              tx.category.count({
+                where: {
+                  ...whereClause,
+                  parentCategoryId: null,
+                },
+              }),
+              tx.category.findMany({
+                where: whereClause,
+                skip: (Number(page) - 1) * Number(size),
+                take: Number(size),
+                orderBy: { name: "asc" },
+              }),
+              tx.userLikedCategory.findMany({
+                where: { userId },
+              }),
+              tx.question.groupBy({
+                by: ["categoryId"],
+                _count: { _all: true },
+                where: {
+                  categoryId: {
+                    in: (
+                      await tx.category.findMany({
+                        where: whereClause,
+                        select: { id: true },
+                        skip: (Number(page) - 1) * Number(size),
+                        take: Number(size),
+                      })
+                    ).map((c) => c.id),
+                  },
+                },
+              }),
+            ]);
+
+          const countMap = Object.fromEntries(
+            questionCounts.map((qc) => [qc.categoryId, qc._count._all]),
+          );
+
+          const tempCategories = categories.map((cat) => ({
+            ...cat,
+            questionCount: countMap[cat.id] || 0,
+            isCategoryLiked: userLikedCategories.some(
+              (liked) => liked.categoryId === cat.id,
+            ),
+          }));
 
           return {
-            data: categories,
+            data: tempCategories,
             meta: {
               total,
               page,
@@ -75,7 +122,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
 
         reply.code(200).send(result);
       } catch (error) {
-        reply.code(500).send({ message: "Internal Server Error" + error });
+        reply.code(500).send({ message: "Internal Server Error: " + error });
       }
     },
   });
@@ -91,23 +138,50 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       }),
     },
     handler: async (req, reply) => {
+      const userId = req.user.id;
       const { id } = req.params;
 
       try {
         const result = await prisma.$transaction(async (tx) => {
+          const user = await tx.user.findFirst({
+            where: { id: userId },
+            include: { userReferencedCategories: true },
+          });
           const category = await tx.category.findUnique({
             where: { id },
             include: {
-              questions: true,
               parentCategory: true,
               childCategories: true,
+              questions: true,
             },
           });
+
           if (!category) {
             return { code: 404, error: { message: "Category not found" } };
           }
+          if (category.isPremiumCat && !user?.isPaidMembership) {
+            return {
+              code: 409,
+              error: { message: "This user has no right to see category" },
+            };
+          }
+          if (
+            category.isRefCat &&
+            user?.userReferencedCategories.findIndex(
+              (x) => x.categoryId == category.id,
+            ) !== -1
+          ) {
+            return {
+              code: 409,
+              error: { message: "This user has no right to see category" },
+            };
+          }
 
-          return { category };
+          const questionCount = await tx.question.count({
+            where: { categoryId: id },
+          });
+
+          return { category, questionCount };
         });
 
         if (result.error) {
@@ -115,7 +189,10 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           return;
         }
 
-        reply.code(200).send(result.category);
+        reply.code(200).send({
+          ...result.category,
+          questionCount: result.questionCount,
+        });
       } catch (error) {
         reply.code(500).send({ message: "Internal Server Error", error });
       }
@@ -239,7 +316,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
     },
   });
   fastify.withTypeProvider<ZodTypeProvider>().route({
-    url: "/:id/categoryQuestionCompleted",
+    url: "/:id/category-question-completed",
     method: "PUT",
     preHandler: [fastify.authenticate],
     schema: {
@@ -282,7 +359,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
     },
   });
   fastify.withTypeProvider<ZodTypeProvider>().route({
-    url: "/:id/likeCategory",
+    url: "/:id/like-category",
     method: "PUT",
     preHandler: [fastify.authenticate],
     schema: {
@@ -302,10 +379,10 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
             return { code: 404, error: { message: "Category not found" } };
           }
 
-          const createLikedCategory = await tx.userLikedQuestion.create({
+          const createLikedCategory = await tx.userLikedCategory.create({
             data: {
               userId,
-              questionId: id,
+              categoryId: id,
             },
           });
 
@@ -313,6 +390,44 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         });
 
         reply.code(201).send(result.likedCategory);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/:id/unlike-category",
+    method: "DELETE",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Category"],
+      summary: "User like a category",
+      params: z.object({
+        id: z.string().nonempty(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+      const { id } = req.params as { id: string };
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          var category = await tx.category.findFirst({ where: { id: id } });
+          if (!category) {
+            return { code: 404, error: { message: "Category not found" } };
+          }
+
+          await tx.userLikedCategory.deleteMany({
+            where: {
+              userId,
+              categoryId: id,
+            },
+          });
+
+          return { message: "Like removed" };
+        });
+
+        reply.code(201).send(result.message);
       } catch (error) {
         reply.code(500).send({ message: "Internal Server Error", error });
       }

@@ -28,6 +28,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
               phoneNumber: z.string().nullable(),
               gender: z.boolean(),
               age: z.string().nullable(),
+              isPaidMembership: z.boolean(),
               likedQuestions: z.array(
                 z.object({
                   id: z.string(),
@@ -113,10 +114,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
           },
         });
       }
-
-      // const oneTimePassCode = String(
-      //   Math.floor(Math.random() * 1000000),
-      // ).padStart(6, "0");
       const oneTimePassCode = String("123456");
 
       await prisma.userOneTimeCode.create({

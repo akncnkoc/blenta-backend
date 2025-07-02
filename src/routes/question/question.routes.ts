@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import z from "zod/v4";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, UserReferencedCategory } from "@prisma/client";
 const prisma = new PrismaClient();
 
 export default async function questionRoutes(fastify: FastifyInstance) {
@@ -28,7 +28,10 @@ export default async function questionRoutes(fastify: FastifyInstance) {
 
       try {
         const result = await prisma.$transaction(async (tx) => {
-          const user = await tx.user.findFirst({ where: { id: userId } });
+          const user = await tx.user.findFirst({
+            where: { id: userId },
+            include: { userReferencedCategories: true },
+          });
           if (!user) return { code: 404, error: { message: "User not found" } };
 
           const category = await tx.category.findFirst({
@@ -37,23 +40,21 @@ export default async function questionRoutes(fastify: FastifyInstance) {
           if (!category)
             return { code: 404, error: { message: "Category not found" } };
 
-          if (category.isPremiumCat && !user.isPaidMembership) {
+          if (category.isPremiumCat && !user?.isPaidMembership) {
             return {
               code: 409,
-              error: {
-                message: "This user cannot access this premium category",
-              },
+              error: { message: "This user has no right to see category" },
             };
           }
           if (
             category.isRefCat &&
-            (!user.referenceCode || user.referenceCode == "")
+            user?.userReferencedCategories.findIndex(
+              (x: UserReferencedCategory) => x.categoryId == category.id,
+            ) !== -1
           ) {
             return {
               code: 409,
-              error: {
-                message: "This user cannot access this referenced category",
-              },
+              error: { message: "This user has no right to see category" },
             };
           }
 
@@ -97,6 +98,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
       }),
     },
     handler: async (req, reply) => {
+      const userId = req.user.id;
       const { id } = req.params;
 
       try {
@@ -113,8 +115,16 @@ export default async function questionRoutes(fastify: FastifyInstance) {
             ...question,
             nextQuestionId: nextQuestion?.id,
           };
+          var isQuestionLiked = await tx.userLikedQuestion.findFirst({
+            where: { questionId: id, userId: userId },
+          });
 
-          return { question: questionCreated };
+          return {
+            question: {
+              ...questionCreated,
+              questionLiked: isQuestionLiked ? true : false,
+            },
+          };
         });
 
         reply.code(201).send(result.question);
