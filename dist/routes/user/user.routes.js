@@ -28,6 +28,7 @@ async function userRoutes(fastify) {
                         phoneNumber: v4_1.default.string().nullable(),
                         gender: v4_1.default.boolean(),
                         age: v4_1.default.string().nullable(),
+                        isPaidMembership: v4_1.default.boolean(),
                         likedQuestions: v4_1.default.array(v4_1.default.object({
                             id: v4_1.default.string(),
                             userId: v4_1.default.string(),
@@ -101,9 +102,6 @@ async function userRoutes(fastify) {
                     },
                 });
             }
-            // const oneTimePassCode = String(
-            //   Math.floor(Math.random() * 1000000),
-            // ).padStart(6, "0");
             const oneTimePassCode = String("123456");
             await prisma.userOneTimeCode.create({
                 data: {

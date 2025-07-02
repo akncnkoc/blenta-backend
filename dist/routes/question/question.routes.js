@@ -30,7 +30,10 @@ async function questionRoutes(fastify) {
             const skip = (Number(page) - 1) * Number(limit);
             try {
                 const result = await prisma.$transaction(async (tx) => {
-                    const user = await tx.user.findFirst({ where: { id: userId } });
+                    const user = await tx.user.findFirst({
+                        where: { id: userId },
+                        include: { userReferencedCategories: true },
+                    });
                     if (!user)
                         return { code: 404, error: { message: "User not found" } };
                     const category = await tx.category.findFirst({
@@ -38,21 +41,17 @@ async function questionRoutes(fastify) {
                     });
                     if (!category)
                         return { code: 404, error: { message: "Category not found" } };
-                    if (category.isPremiumCat && !user.isPaidMembership) {
+                    if (category.isPremiumCat && !user?.isPaidMembership) {
                         return {
                             code: 409,
-                            error: {
-                                message: "This user cannot access this premium category",
-                            },
+                            error: { message: "This user has no right to see category" },
                         };
                     }
                     if (category.isRefCat &&
-                        (!user.referenceCode || user.referenceCode == "")) {
+                        user?.userReferencedCategories.findIndex((x) => x.categoryId == category.id) !== -1) {
                         return {
                             code: 409,
-                            error: {
-                                message: "This user cannot access this referenced category",
-                            },
+                            error: { message: "This user has no right to see category" },
                         };
                     }
                     const [questions, total] = await Promise.all([
@@ -94,6 +93,7 @@ async function questionRoutes(fastify) {
             }),
         },
         handler: async (req, reply) => {
+            const userId = req.user.id;
             const { id } = req.params;
             try {
                 const result = await prisma.$transaction(async (tx) => {
@@ -108,7 +108,15 @@ async function questionRoutes(fastify) {
                         ...question,
                         nextQuestionId: nextQuestion?.id,
                     };
-                    return { question: questionCreated };
+                    var isQuestionLiked = await tx.userLikedQuestion.findFirst({
+                        where: { questionId: id, userId: userId },
+                    });
+                    return {
+                        question: {
+                            ...questionCreated,
+                            questionLiked: isQuestionLiked ? true : false,
+                        },
+                    };
                 });
                 reply.code(201).send(result.question);
             }

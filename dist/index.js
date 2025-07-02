@@ -49,9 +49,16 @@ const category_routes_1 = __importDefault(require("./routes/category/category.ro
 const cookie_1 = __importDefault(require("@fastify/cookie"));
 const OneSignal = __importStar(require("@onesignal/node-onesignal"));
 const fastify_type_provider_zod_1 = require("fastify-type-provider-zod");
+const cors_1 = __importDefault(require("@fastify/cors"));
+const admin_routes_1 = __importDefault(require("./routes/admin/admin.routes"));
 const fastify = (0, fastify_1.default)({ logger: true }).withTypeProvider();
 const start = async () => {
     try {
+        fastify.register(cors_1.default, {
+            origin: "*", // allow all origins
+            methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"], // allowed HTTP methods
+            allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"], // headers you want to allow
+        });
         await fastify.register(swagger_1.default, {
             openapi: {
                 info: {
@@ -85,18 +92,6 @@ const start = async () => {
                 docExpansion: "none",
             },
         });
-        // fastify.addSchema({
-        //   $id: "Category",
-        //   ...CategorySchema,
-        // });
-        // fastify.addSchema({
-        //   $id: "Question",
-        //   ...QuestionSchema,
-        // });
-        //
-        // for (let schema of [...userSchemas]) {
-        //   fastify.addSchema(schema);
-        // }
         fastify.register(jwt_1.default);
         fastify.addHook("preHandler", (req, _, next) => {
             req.jwt = fastify.jwt;
@@ -111,6 +106,7 @@ const start = async () => {
         fastify.register(user_routes_1.default, { prefix: "/user" });
         fastify.register(category_routes_1.default, { prefix: "/category" });
         fastify.register(question_routes_1.default, { prefix: "/question" });
+        fastify.register(admin_routes_1.default, { prefix: "/admin" });
         fastify.get("/healthcheck", (req, res) => {
             res.send({ message: "Success" });
         });
