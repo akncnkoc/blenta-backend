@@ -51,6 +51,7 @@ const OneSignal = __importStar(require("@onesignal/node-onesignal"));
 const fastify_type_provider_zod_1 = require("fastify-type-provider-zod");
 const cors_1 = __importDefault(require("@fastify/cors"));
 const admin_routes_1 = __importDefault(require("./routes/admin/admin.routes"));
+const tag_routes_1 = __importDefault(require("./routes/tag/tag.routes"));
 const fastify = (0, fastify_1.default)({ logger: true }).withTypeProvider();
 const start = async () => {
     try {
@@ -105,6 +106,7 @@ const start = async () => {
         fastify.register(error_handler_1.default);
         fastify.register(user_routes_1.default, { prefix: "/user" });
         fastify.register(category_routes_1.default, { prefix: "/category" });
+        fastify.register(tag_routes_1.default, { prefix: "/tag" });
         fastify.register(question_routes_1.default, { prefix: "/question" });
         fastify.register(admin_routes_1.default, { prefix: "/admin" });
         fastify.get("/healthcheck", (req, res) => {
