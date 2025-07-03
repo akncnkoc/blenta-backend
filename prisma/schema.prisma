@@ -84,6 +84,14 @@ model UserAgreement {
   @@map("user_agreements")
 }
 
+model Tag {
+  id           String        @id @default(uuid())
+  name         String
+  categoryTags CategoryTag[]
+
+  @@map("tags")
+}
+
 model Category {
   id                       String                   @id @default(uuid())
   name                     String
@@ -101,8 +109,19 @@ model Category {
   childCategories          Category[]               @relation("CategoryToCategory")
   questions                Question[]
   userReferencedCategories UserReferencedCategory[]
+  categoryTags             CategoryTag[]
 
   @@map("categories")
+}
+
+model CategoryTag {
+  id         String   @id @default(uuid())
+  categoryId String
+  tagId      String
+  category   Category @relation(fields: [categoryId], references: [id])
+  tag        Tag      @relation(fields: [tagId], references: [id])
+
+  @@map("category_tags")
 }
 
 model UserReferencedCategory {
