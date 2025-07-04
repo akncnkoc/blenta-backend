@@ -120,8 +120,8 @@ async function userRoutes(fastify) {
             }
             console.log("Prepared email payload:", JSON.stringify(mailTemp, null, 2));
             try {
-                const result = await mail.sendMail(mailTemp);
-                console.log("Mail sent successfully:", result?.response);
+                // const result = await mail.sendMail(mailTemp);
+                // console.log("Mail sent successfully:", result?.response);
             }
             catch (err) {
                 console.log(err);

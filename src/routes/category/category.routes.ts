@@ -3,7 +3,28 @@ import z from "zod/v4";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { Prisma, PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
-
+const CategorySchema: z.ZodType<any> = z.lazy(() =>
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    parentCategoryId: z.string().nullable(),
+    culture: z.string(),
+    color: z.string(),
+    isPremiumCat: z.boolean(),
+    isRefCat: z.boolean(),
+    type: z.enum(["QUESTION", "TEST"]),
+    questionCount: z.number(),
+    isCategoryLiked: z.boolean(),
+    categoryTags: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+      }),
+    ),
+    childCategories: z.array(CategorySchema), // recursion!
+  }),
+);
 export default async function categoryRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/",
@@ -35,8 +56,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               categoryTags: z.array(
                 z.object({
                   id: z.string(),
-                  tagId: z.string(),
-                  categoryId: z.string(),
+                  name: z.string(),
                 }),
               ),
               type: z.enum(["QUESTION", "TEST"]),
@@ -83,7 +103,18 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
                   ...whereClause,
                   parentCategoryId: null,
                 },
-                include: { categoryTags: true },
+                include: {
+                  categoryTags: {
+                    select: {
+                      tag: {
+                        select: {
+                          name: true,
+                          id: true,
+                        },
+                      },
+                    },
+                  },
+                },
                 skip: (Number(page) - 1) * Number(size),
                 take: Number(size),
                 orderBy: { name: "asc" },
@@ -115,6 +146,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
 
           const tempCategories = categories.map((cat) => ({
             ...cat,
+            categoryTags: cat.categoryTags.map((ct) => ct.tag), // ❌ tag object
             questionCount: countMap[cat.id] || 0,
             isCategoryLiked: userLikedCategories.some(
               (liked) => liked.categoryId === cat.id,
@@ -149,31 +181,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         id: z.string().nonempty(),
       }),
       response: {
-        200: z.object({
-          id: z.string(),
-          name: z.string(),
-          description: z.string().nullable(),
-          parentCategoryId: z.string().nullable(),
-          culture: z.string(),
-          color: z.string(),
-          isPremiumCat: z.boolean(),
-          isRefCat: z.boolean(),
-          questionCount: z.number(),
-          type: z.enum(["QUESTION", "TEST"]),
-          childCategories: z.array(
-            z.object({
-              id: z.string(),
-              name: z.string(),
-              description: z.string().nullable(),
-              parentCategoryId: z.string().nullable(),
-              culture: z.string(),
-              color: z.string(),
-              isPremiumCat: z.boolean(),
-              isRefCat: z.boolean(),
-              type: z.enum(["QUESTION", "TEST"]),
-            }),
-          ),
-        }),
+        200: CategorySchema,
         500: z.object({ message: z.string() }),
       },
     },
@@ -182,34 +190,38 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       const { id } = req.params;
 
       try {
-        const result = await prisma.$transaction(async (tx) => {
+        const enrichedCategory = await prisma.$transaction(async (tx) => {
           const user = await tx.user.findFirst({
             where: { id: userId },
             include: { userReferencedCategories: true },
           });
-          const category = await tx.category.findUnique({
+
+          const root = await tx.category.findUnique({
             where: { id },
             include: {
-              parentCategory: true,
+              categoryTags: {
+                select: { tag: { select: { id: true, name: true } } },
+              },
               childCategories: true,
-              questions: true,
             },
           });
 
-          if (!category) {
+          if (!root) {
             return { code: 404, error: { message: "Category not found" } };
           }
-          if (category.isPremiumCat && !user?.isPaidMembership) {
+
+          if (root.isPremiumCat && !user?.isPaidMembership) {
             return {
               code: 409,
               error: { message: "This user has no right to see category" },
             };
           }
+
           if (
-            category.isRefCat &&
+            root.isRefCat &&
             user?.userReferencedCategories.findIndex(
-              (x) => x.categoryId == category.id,
-            ) !== -1
+              (x) => x.categoryId === root.id,
+            ) === -1
           ) {
             return {
               code: 409,
@@ -217,24 +229,75 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
             };
           }
 
-          const questionCount = await tx.question.count({
-            where: { categoryId: id },
-          });
+          const enrichCategory = async (
+            category: typeof root,
+          ): Promise<any> => {
+            const [questionCount, isLiked, tags, children] = await Promise.all([
+              tx.question.count({ where: { categoryId: category.id } }),
+              tx.userLikedCategory.findFirst({
+                where: { categoryId: category.id, userId },
+              }),
+              tx.category.findUnique({
+                where: { id: category.id },
+                select: {
+                  categoryTags: {
+                    select: {
+                      tag: { select: { id: true, name: true } },
+                    },
+                  },
+                },
+              }),
+              tx.category.findMany({
+                where: { parentCategoryId: category.id },
+              }),
+            ]);
 
-          return { category, questionCount };
+            const childEnriched = await Promise.all(
+              children.map((child) =>
+                tx.category
+                  .findUnique({
+                    where: { id: child.id },
+                    include: {
+                      categoryTags: {
+                        select: {
+                          tag: { select: { id: true, name: true } },
+                        },
+                      },
+                      childCategories: true,
+                    },
+                  })
+                  .then((fullChild) => enrichCategory(fullChild!)),
+              ),
+            );
+
+            return {
+              id: category.id,
+              name: category.name,
+              description: category.description,
+              parentCategoryId: category.parentCategoryId,
+              culture: category.culture,
+              color: category.color,
+              isPremiumCat: category.isPremiumCat,
+              isRefCat: category.isRefCat,
+              type: category.type,
+              questionCount,
+              isCategoryLiked: !!isLiked,
+              categoryTags: tags?.categoryTags.map((ct) => ct.tag) || [],
+              childCategories: childEnriched,
+            };
+          };
+
+          return await enrichCategory(root);
         });
 
-        if (result.error) {
-          reply.code(result.code).send(result.error);
+        if ("error" in enrichedCategory) {
+          reply.code(enrichedCategory.code).send(enrichedCategory.error);
           return;
         }
 
-        reply.code(200).send({
-          ...result.category,
-          questionCount: result.questionCount,
-        });
+        reply.code(200).send(enrichedCategory);
       } catch (error) {
-        reply.code(500).send({ message: "Internal Server Error" + error });
+        reply.code(500).send({ message: "Internal Server Error: " + error });
       }
     },
   });
@@ -342,6 +405,58 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           });
 
           return { category: updatedCategory };
+        });
+
+        if (result.error) {
+          reply.code(result.code).send(result.error);
+          return;
+        }
+
+        reply.code(200).send(result.category);
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error", error });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/:id/addTag",
+    method: "PUT",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Category"],
+      summary: "Add Category a tag",
+      params: z.object({
+        id: z.string(),
+      }),
+      body: z.object({
+        tagId: z.string(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const { id } = req.params;
+      const { tagId } = req.body;
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          const category = await tx.category.findFirst({ where: { id } });
+          if (!category) {
+            return { code: 404, error: { message: "Category not found" } };
+          }
+          const tag = await tx.tag.findUnique({ where: { id: tagId } });
+          if (!tag) {
+            return { code: 404, error: { message: "Tag not found" } };
+          }
+
+          const categoryTag = await tx.categoryTag.findFirst({
+            where: { categoryId: id, tagId: tagId },
+          });
+          if (categoryTag) {
+            return {
+              code: 409,
+              error: { message: "Tag already added category" },
+            };
+          }
+
+          return { category: category };
         });
 
         if (result.error) {

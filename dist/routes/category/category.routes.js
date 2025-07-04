@@ -7,6 +7,24 @@ exports.default = categoryRoutes;
 const v4_1 = __importDefault(require("zod/v4"));
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
+const CategorySchema = v4_1.default.lazy(() => v4_1.default.object({
+    id: v4_1.default.string(),
+    name: v4_1.default.string(),
+    description: v4_1.default.string().nullable(),
+    parentCategoryId: v4_1.default.string().nullable(),
+    culture: v4_1.default.string(),
+    color: v4_1.default.string(),
+    isPremiumCat: v4_1.default.boolean(),
+    isRefCat: v4_1.default.boolean(),
+    type: v4_1.default.enum(["QUESTION", "TEST"]),
+    questionCount: v4_1.default.number(),
+    isCategoryLiked: v4_1.default.boolean(),
+    categoryTags: v4_1.default.array(v4_1.default.object({
+        id: v4_1.default.string(),
+        name: v4_1.default.string(),
+    })),
+    childCategories: v4_1.default.array(CategorySchema), // recursion!
+}));
 async function categoryRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/",
@@ -36,8 +54,7 @@ async function categoryRoutes(fastify) {
                         isCategoryLiked: v4_1.default.boolean(),
                         categoryTags: v4_1.default.array(v4_1.default.object({
                             id: v4_1.default.string(),
-                            tagId: v4_1.default.string(),
-                            categoryId: v4_1.default.string(),
+                            name: v4_1.default.string(),
                         })),
                         type: v4_1.default.enum(["QUESTION", "TEST"]),
                     })),
@@ -79,7 +96,18 @@ async function categoryRoutes(fastify) {
                                 ...whereClause,
                                 parentCategoryId: null,
                             },
-                            include: { categoryTags: true },
+                            include: {
+                                categoryTags: {
+                                    select: {
+                                        tag: {
+                                            select: {
+                                                name: true,
+                                                id: true,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
                             skip: (Number(page) - 1) * Number(size),
                             take: Number(size),
                             orderBy: { name: "asc" },
@@ -105,6 +133,7 @@ async function categoryRoutes(fastify) {
                     const countMap = Object.fromEntries(questionCounts.map((qc) => [qc.categoryId, qc._count._all]));
                     const tempCategories = categories.map((cat) => ({
                         ...cat,
+                        categoryTags: cat.categoryTags.map((ct) => ct.tag), // ❌ tag object
                         questionCount: countMap[cat.id] || 0,
                         isCategoryLiked: userLikedCategories.some((liked) => liked.categoryId === cat.id),
                     }));
@@ -136,29 +165,7 @@ async function categoryRoutes(fastify) {
                 id: v4_1.default.string().nonempty(),
             }),
             response: {
-                200: v4_1.default.object({
-                    id: v4_1.default.string(),
-                    name: v4_1.default.string(),
-                    description: v4_1.default.string().nullable(),
-                    parentCategoryId: v4_1.default.string().nullable(),
-                    culture: v4_1.default.string(),
-                    color: v4_1.default.string(),
-                    isPremiumCat: v4_1.default.boolean(),
-                    isRefCat: v4_1.default.boolean(),
-                    questionCount: v4_1.default.number(),
-                    type: v4_1.default.enum(["QUESTION", "TEST"]),
-                    childCategories: v4_1.default.array(v4_1.default.object({
-                        id: v4_1.default.string(),
-                        name: v4_1.default.string(),
-                        description: v4_1.default.string().nullable(),
-                        parentCategoryId: v4_1.default.string().nullable(),
-                        culture: v4_1.default.string(),
-                        color: v4_1.default.string(),
-                        isPremiumCat: v4_1.default.boolean(),
-                        isRefCat: v4_1.default.boolean(),
-                        type: v4_1.default.enum(["QUESTION", "TEST"]),
-                    })),
-                }),
+                200: CategorySchema,
                 500: v4_1.default.object({ message: v4_1.default.string() }),
             },
         },
@@ -166,51 +173,95 @@ async function categoryRoutes(fastify) {
             const userId = req.user.id;
             const { id } = req.params;
             try {
-                const result = await prisma.$transaction(async (tx) => {
+                const enrichedCategory = await prisma.$transaction(async (tx) => {
                     const user = await tx.user.findFirst({
                         where: { id: userId },
                         include: { userReferencedCategories: true },
                     });
-                    const category = await tx.category.findUnique({
+                    const root = await tx.category.findUnique({
                         where: { id },
                         include: {
-                            parentCategory: true,
+                            categoryTags: {
+                                select: { tag: { select: { id: true, name: true } } },
+                            },
                             childCategories: true,
-                            questions: true,
                         },
                     });
-                    if (!category) {
+                    if (!root) {
                         return { code: 404, error: { message: "Category not found" } };
                     }
-                    if (category.isPremiumCat && !user?.isPaidMembership) {
+                    if (root.isPremiumCat && !user?.isPaidMembership) {
                         return {
                             code: 409,
                             error: { message: "This user has no right to see category" },
                         };
                     }
-                    if (category.isRefCat &&
-                        user?.userReferencedCategories.findIndex((x) => x.categoryId == category.id) !== -1) {
+                    if (root.isRefCat &&
+                        user?.userReferencedCategories.findIndex((x) => x.categoryId === root.id) === -1) {
                         return {
                             code: 409,
                             error: { message: "This user has no right to see category" },
                         };
                     }
-                    const questionCount = await tx.question.count({
-                        where: { categoryId: id },
-                    });
-                    return { category, questionCount };
+                    const enrichCategory = async (category) => {
+                        const [questionCount, isLiked, tags, children] = await Promise.all([
+                            tx.question.count({ where: { categoryId: category.id } }),
+                            tx.userLikedCategory.findFirst({
+                                where: { categoryId: category.id, userId },
+                            }),
+                            tx.category.findUnique({
+                                where: { id: category.id },
+                                select: {
+                                    categoryTags: {
+                                        select: {
+                                            tag: { select: { id: true, name: true } },
+                                        },
+                                    },
+                                },
+                            }),
+                            tx.category.findMany({
+                                where: { parentCategoryId: category.id },
+                            }),
+                        ]);
+                        const childEnriched = await Promise.all(children.map((child) => tx.category
+                            .findUnique({
+                            where: { id: child.id },
+                            include: {
+                                categoryTags: {
+                                    select: {
+                                        tag: { select: { id: true, name: true } },
+                                    },
+                                },
+                                childCategories: true,
+                            },
+                        })
+                            .then((fullChild) => enrichCategory(fullChild))));
+                        return {
+                            id: category.id,
+                            name: category.name,
+                            description: category.description,
+                            parentCategoryId: category.parentCategoryId,
+                            culture: category.culture,
+                            color: category.color,
+                            isPremiumCat: category.isPremiumCat,
+                            isRefCat: category.isRefCat,
+                            type: category.type,
+                            questionCount,
+                            isCategoryLiked: !!isLiked,
+                            categoryTags: tags?.categoryTags.map((ct) => ct.tag) || [],
+                            childCategories: childEnriched,
+                        };
+                    };
+                    return await enrichCategory(root);
                 });
-                if (result.error) {
-                    reply.code(result.code).send(result.error);
+                if ("error" in enrichedCategory) {
+                    reply.code(enrichedCategory.code).send(enrichedCategory.error);
                     return;
                 }
-                reply.code(200).send({
-                    ...result.category,
-                    questionCount: result.questionCount,
-                });
+                reply.code(200).send(enrichedCategory);
             }
             catch (error) {
-                reply.code(500).send({ message: "Internal Server Error" + error });
+                reply.code(500).send({ message: "Internal Server Error: " + error });
             }
         },
     });
@@ -297,6 +348,55 @@ async function categoryRoutes(fastify) {
                         },
                     });
                     return { category: updatedCategory };
+                });
+                if (result.error) {
+                    reply.code(result.code).send(result.error);
+                    return;
+                }
+                reply.code(200).send(result.category);
+            }
+            catch (error) {
+                reply.code(500).send({ message: "Internal Server Error", error });
+            }
+        },
+    });
+    fastify.withTypeProvider().route({
+        url: "/:id/addTag",
+        method: "PUT",
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ["Category"],
+            summary: "Add Category a tag",
+            params: v4_1.default.object({
+                id: v4_1.default.string(),
+            }),
+            body: v4_1.default.object({
+                tagId: v4_1.default.string(),
+            }),
+        },
+        handler: async (req, reply) => {
+            const { id } = req.params;
+            const { tagId } = req.body;
+            try {
+                const result = await prisma.$transaction(async (tx) => {
+                    const category = await tx.category.findFirst({ where: { id } });
+                    if (!category) {
+                        return { code: 404, error: { message: "Category not found" } };
+                    }
+                    const tag = await tx.tag.findUnique({ where: { id: tagId } });
+                    if (!tag) {
+                        return { code: 404, error: { message: "Tag not found" } };
+                    }
+                    const categoryTag = await tx.categoryTag.findFirst({
+                        where: { categoryId: id, tagId: tagId },
+                    });
+                    if (categoryTag) {
+                        return {
+                            code: 409,
+                            error: { message: "Tag already added category" },
+                        };
+                    }
+                    return { category: category };
                 });
                 if (result.error) {
                     reply.code(result.code).send(result.error);
