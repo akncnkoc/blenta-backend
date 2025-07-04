@@ -23,8 +23,14 @@ async function tagRoutes(fastify) {
             const { categoryId } = req.params;
             try {
                 const result = await prisma.$transaction(async (tx) => {
-                    var tags = tx.categoryTag.findMany({
+                    var catTags = await tx.categoryTag.findMany({
                         where: { categoryId },
+                        select: { tagId: true },
+                    });
+                    const tagIds = catTags.map((ct) => ct.tagId);
+                    // Step 3: Use those IDs to get full tag records
+                    const tags = await tx.tag.findMany({
+                        where: { id: { in: tagIds } },
                     });
                     return {
                         tags,

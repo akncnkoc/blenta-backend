@@ -46,6 +46,11 @@ async function userRoutes(fastify) {
                             questionId: v4_1.default.string(),
                             viewedAt: v4_1.default.date(),
                         })),
+                        userLikedCategories: v4_1.default.array(v4_1.default.object({
+                            id: v4_1.default.string(),
+                            userId: v4_1.default.string(),
+                            categoryId: v4_1.default.string(),
+                        })),
                     })
                         .nullable(),
                 }),

@@ -32,7 +32,6 @@ async function questionRoutes(fastify) {
                 const result = await prisma.$transaction(async (tx) => {
                     const user = await tx.user.findFirst({
                         where: { id: userId },
-                        include: { userReferencedCategories: true },
                     });
                     if (!user)
                         return { code: 404, error: { message: "User not found" } };
@@ -41,20 +40,7 @@ async function questionRoutes(fastify) {
                     });
                     if (!category)
                         return { code: 404, error: { message: "Category not found" } };
-                    if (category.isPremiumCat && !user?.isPaidMembership) {
-                        return {
-                            code: 409,
-                            error: { message: "This user has no right to see category" },
-                        };
-                    }
-                    if (category.isRefCat &&
-                        user?.userReferencedCategories.findIndex((x) => x.categoryId == category.id) !== -1) {
-                        return {
-                            code: 409,
-                            error: { message: "This user has no right to see category" },
-                        };
-                    }
-                    const [questions, total] = await Promise.all([
+                    const [questions, total, userLikedQuestions] = await Promise.all([
                         tx.question.findMany({
                             where: { categoryId },
                             skip,
@@ -64,9 +50,16 @@ async function questionRoutes(fastify) {
                         tx.question.count({
                             where: { categoryId },
                         }),
+                        tx.userLikedQuestion.findMany({
+                            where: { userId: userId },
+                        }),
                     ]);
+                    const tempQuestions = questions.map((ques) => ({
+                        ...ques,
+                        isQuestionLiked: userLikedQuestions.some((liked) => liked.questionId === ques.id),
+                    }));
                     return {
-                        questions,
+                        questions: tempQuestions,
                         total,
                         page,
                         limit,

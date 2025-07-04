@@ -52,6 +52,13 @@ export default async function userRoutes(fastify: FastifyInstance) {
                   viewedAt: z.date(),
                 }),
               ),
+              userLikedCategories: z.array(
+                z.object({
+                  id: z.string(),
+                  userId: z.string(),
+                  categoryId: z.string(),
+                }),
+              ),
             })
             .nullable(),
         }),
