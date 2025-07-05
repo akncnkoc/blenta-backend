@@ -623,7 +623,7 @@ async function categoryRoutes(fastify) {
                         };
                     }
                     var alreadyExistsReference = await tx.userReferencedCategory.findFirst({
-                        where: { categoryId: id, userId, referenceCode: refCode },
+                        where: { userId, referenceCode: refCode },
                     });
                     if (alreadyExistsReference) {
                         return {

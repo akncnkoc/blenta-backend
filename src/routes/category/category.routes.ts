@@ -711,7 +711,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
 
           var alreadyExistsReference =
             await tx.userReferencedCategory.findFirst({
-              where: { categoryId: id, userId, referenceCode: refCode },
+              where: { userId, referenceCode: refCode },
             });
 
           if (alreadyExistsReference) {
