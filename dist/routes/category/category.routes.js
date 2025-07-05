@@ -616,7 +616,7 @@ async function categoryRoutes(fastify) {
                     var userRefCodes = await tx.user.findMany({
                         select: { referenceCode: true },
                     });
-                    if (!userRefCodes.includes({ referenceCode: refCode })) {
+                    if (!userRefCodes.map((ref) => ref.referenceCode).includes(refCode)) {
                         return {
                             code: 409,
                             error: { message: "Reference code not found" },
