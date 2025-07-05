@@ -19,6 +19,7 @@ const CategorySchema = v4_1.default.lazy(() => v4_1.default.object({
     type: v4_1.default.enum(["QUESTION", "TEST"]),
     questionCount: v4_1.default.number(),
     isCategoryLiked: v4_1.default.boolean(),
+    isUserReferenced: v4_1.default.boolean().nullable().optional(),
     categoryTags: v4_1.default.array(v4_1.default.object({
         id: v4_1.default.string(),
         name: v4_1.default.string(),
@@ -225,7 +226,8 @@ async function categoryRoutes(fastify) {
                             error: { message: "This user has no right to see category" },
                         };
                     }
-                    const enrichCategory = async (category) => {
+                    const enrichCategory = async (category, currentUser) => {
+                        const isUserReferenced = user?.userReferencedCategories.some((x) => x.categoryId === category.id) ?? false;
                         const [questionCount, isLiked, tags, children] = await Promise.all([
                             tx.question.count({ where: { categoryId: category.id } }),
                             tx.userLikedCategory.findFirst({
@@ -257,7 +259,7 @@ async function categoryRoutes(fastify) {
                                 childCategories: true,
                             },
                         })
-                            .then((fullChild) => enrichCategory(fullChild))));
+                            .then((fullChild) => enrichCategory(fullChild, currentUser))));
                         return {
                             id: category.id,
                             name: category.name,
@@ -272,9 +274,10 @@ async function categoryRoutes(fastify) {
                             isCategoryLiked: !!isLiked,
                             categoryTags: tags?.categoryTags.map((ct) => ct.tag) || [],
                             childCategories: childEnriched,
+                            isUserReferenced: category.id === root.id ? isUserReferenced : undefined,
                         };
                     };
-                    return await enrichCategory(root);
+                    return await enrichCategory(root, user);
                 });
                 if ("error" in enrichedCategory) {
                     reply.code(enrichedCategory.code).send(enrichedCategory.error);
