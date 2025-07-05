@@ -16,6 +16,7 @@ const CategorySchema: z.ZodType<any> = z.lazy(() =>
     type: z.enum(["QUESTION", "TEST"]),
     questionCount: z.number(),
     isCategoryLiked: z.boolean(),
+    isUserReferenced: z.boolean().nullable().optional(),
     categoryTags: z.array(
       z.object({
         id: z.string(),
@@ -253,7 +254,12 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
 
           const enrichCategory = async (
             category: typeof root,
+            currentUser: typeof user,
           ): Promise<any> => {
+            const isUserReferenced =
+              user?.userReferencedCategories.some(
+                (x) => x.categoryId === category.id,
+              ) ?? false;
             const [questionCount, isLiked, tags, children] = await Promise.all([
               tx.question.count({ where: { categoryId: category.id } }),
               tx.userLikedCategory.findFirst({
@@ -288,7 +294,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
                       childCategories: true,
                     },
                   })
-                  .then((fullChild) => enrichCategory(fullChild!)),
+                  .then((fullChild) => enrichCategory(fullChild!, currentUser)),
               ),
             );
 
@@ -306,10 +312,12 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               isCategoryLiked: !!isLiked,
               categoryTags: tags?.categoryTags.map((ct) => ct.tag) || [],
               childCategories: childEnriched,
+              isUserReferenced:
+                category.id === root.id ? isUserReferenced : undefined,
             };
           };
 
-          return await enrichCategory(root);
+          return await enrichCategory(root, user);
         });
 
         if ("error" in enrichedCategory) {
