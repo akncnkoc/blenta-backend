@@ -274,7 +274,7 @@ async function categoryRoutes(fastify) {
                             isCategoryLiked: !!isLiked,
                             categoryTags: tags?.categoryTags.map((ct) => ct.tag) || [],
                             childCategories: childEnriched,
-                            isUserReferenced: category.id === root.id ? isUserReferenced : undefined,
+                            isUserReferenced,
                         };
                     };
                     return await enrichCategory(root, user);

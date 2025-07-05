@@ -312,8 +312,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               isCategoryLiked: !!isLiked,
               categoryTags: tags?.categoryTags.map((ct) => ct.tag) || [],
               childCategories: childEnriched,
-              isUserReferenced:
-                category.id === root.id ? isUserReferenced : undefined,
+              isUserReferenced,
             };
           };
 
