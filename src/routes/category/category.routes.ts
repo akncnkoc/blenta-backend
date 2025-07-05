@@ -311,11 +311,13 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       body: z.object({
         name: z.string(),
         description: z.string().nullable(),
-        parentCategoryId: z.string(),
+        parentCategoryId: z.string().nullable(),
         culture: z.string(),
         color: z.string(),
         isPremiumCat: z.boolean(),
         isRefCat: z.boolean(),
+        referenceCode: z.string().nullable(),
+        type: z.enum(["QUESTION", "TEST"]),
       }),
     },
     handler: async (req, reply) => {
@@ -327,6 +329,8 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         description,
         isPremiumCat,
         isRefCat,
+        referenceCode,
+        type,
       } = req.body;
 
       try {
@@ -334,12 +338,15 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           const createdCategory = await tx.category.create({
             data: {
               name,
-              parentCategoryId,
+              parentCategoryId:
+                parentCategoryId == "" ? null : parentCategoryId,
               culture,
               color,
               description,
               isPremiumCat,
               isRefCat,
+              type,
+              referenceCode,
             },
           });
 
@@ -370,6 +377,8 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         color: z.string(),
         isPremiumCat: z.boolean(),
         isRefCat: z.boolean(),
+        referenceCode: z.string().nullable(),
+        type: z.enum(["QUESTION", "TEST"]),
       }),
     },
     handler: async (req, reply) => {
@@ -382,6 +391,8 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         description,
         isPremiumCat,
         isRefCat,
+        referenceCode,
+        type,
       } = req.body;
 
       try {
@@ -395,12 +406,15 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
             where: { id },
             data: {
               name,
-              parentCategoryId,
+              parentCategoryId:
+                parentCategoryId == "" ? null : parentCategoryId,
               culture,
               color,
               description,
               isPremiumCat,
               isRefCat,
+              type,
+              referenceCode,
             },
           });
 
