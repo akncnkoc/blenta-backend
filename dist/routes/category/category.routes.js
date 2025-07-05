@@ -613,6 +613,15 @@ async function categoryRoutes(fastify) {
                     if (!category) {
                         return { code: 404, error: { message: "Category not found" } };
                     }
+                    var userRefCodes = await tx.user.findMany({
+                        select: { referenceCode: true },
+                    });
+                    if (!userRefCodes.includes({ referenceCode: refCode })) {
+                        return {
+                            code: 409,
+                            error: { message: "Reference code not found" },
+                        };
+                    }
                     var alreadyExistsReference = await tx.userReferencedCategory.findFirst({
                         where: { categoryId: id, userId, referenceCode: refCode },
                     });
