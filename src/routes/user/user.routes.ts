@@ -30,13 +30,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
               age: z.string().nullable(),
               isPaidMembership: z.boolean(),
               isRegistered: z.boolean(),
-              likedQuestions: z.array(
-                z.object({
-                  id: z.string(),
-                  userId: z.string(),
-                  questionId: z.string(),
-                }),
-              ),
+              referenceCode: z.string(),
               userAnsweredQuestions: z.array(
                 z.object({
                   id: z.string(),
@@ -119,6 +113,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
             role: "USER",
             appEnvironment: "PHONE",
             gender: true,
+            referenceCode: [...Array(8)]
+              .map(() => Math.random().toString(36)[2].toUpperCase())
+              .join(""),
           },
         });
       }
@@ -288,6 +285,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
             email: email ?? `apple_${appleSub}@private.appleid.com`, // fallback mail
             name,
             appEnvironment: "PHONE",
+            referenceCode: [...Array(8)]
+              .map(() => Math.random().toString(36)[2].toUpperCase())
+              .join(""),
           },
         });
       }

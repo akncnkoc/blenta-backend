@@ -30,11 +30,7 @@ async function userRoutes(fastify) {
                         age: v4_1.default.string().nullable(),
                         isPaidMembership: v4_1.default.boolean(),
                         isRegistered: v4_1.default.boolean(),
-                        likedQuestions: v4_1.default.array(v4_1.default.object({
-                            id: v4_1.default.string(),
-                            userId: v4_1.default.string(),
-                            questionId: v4_1.default.string(),
-                        })),
+                        referenceCode: v4_1.default.string(),
                         userAnsweredQuestions: v4_1.default.array(v4_1.default.object({
                             id: v4_1.default.string(),
                             userId: v4_1.default.string(),
@@ -105,6 +101,9 @@ async function userRoutes(fastify) {
                         role: "USER",
                         appEnvironment: "PHONE",
                         gender: true,
+                        referenceCode: [...Array(8)]
+                            .map(() => Math.random().toString(36)[2].toUpperCase())
+                            .join(""),
                     },
                 });
             }
@@ -250,6 +249,9 @@ async function userRoutes(fastify) {
                         email: email ?? `apple_${appleSub}@private.appleid.com`, // fallback mail
                         name,
                         appEnvironment: "PHONE",
+                        referenceCode: [...Array(8)]
+                            .map(() => Math.random().toString(36)[2].toUpperCase())
+                            .join(""),
                     },
                 });
             }

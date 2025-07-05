@@ -37,6 +37,10 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         page: z.string().min(1),
         size: z.string().min(1).max(100),
         search: z.string().optional().nullable(), // 🔍 add search param
+        tagIds: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .nullable(),
       }),
       summary: "Get All Categories with Pagination",
       response: {
@@ -78,6 +82,13 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
 
       try {
         const result = await prisma.$transaction(async (tx) => {
+          let tagIdList: string[] = [];
+
+          if (typeof req.query.tagIds === "string") {
+            tagIdList = [req.query.tagIds];
+          } else if (Array.isArray(req.query.tagIds)) {
+            tagIdList = req.query.tagIds;
+          }
           const whereClause = {
             culture: lang,
             ...(search
@@ -85,6 +96,17 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
                   name: {
                     contains: search,
                     mode: Prisma.QueryMode.insensitive,
+                  },
+                }
+              : {}),
+            ...(tagIdList.length > 0
+              ? {
+                  categoryTags: {
+                    some: {
+                      tagId: {
+                        in: tagIdList,
+                      },
+                    },
                   },
                 }
               : {}),
@@ -329,7 +351,6 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         description,
         isPremiumCat,
         isRefCat,
-        referenceCode,
         type,
       } = req.body;
 
@@ -346,7 +367,6 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               isPremiumCat,
               isRefCat,
               type,
-              referenceCode,
             },
           });
 
@@ -377,7 +397,6 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         color: z.string(),
         isPremiumCat: z.boolean(),
         isRefCat: z.boolean(),
-        referenceCode: z.string().nullable(),
         type: z.enum(["QUESTION", "TEST"]),
       }),
     },
@@ -391,7 +410,6 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         description,
         isPremiumCat,
         isRefCat,
-        referenceCode,
         type,
       } = req.body;
 
@@ -414,7 +432,6 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               isPremiumCat,
               isRefCat,
               type,
-              referenceCode,
             },
           });
 
@@ -673,15 +690,10 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           if (!category) {
             return { code: 404, error: { message: "Category not found" } };
           }
-          if (category.referenceCode != refCode) {
-            return {
-              code: 409,
-              error: { message: "Reference code is not match" },
-            };
-          }
+
           var alreadyExistsReference =
             await tx.userReferencedCategory.findFirst({
-              where: { categoryId: id, userId },
+              where: { categoryId: id, userId, referenceCode: refCode },
             });
           if (alreadyExistsReference) {
             return {
@@ -694,6 +706,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
             data: {
               userId: userId,
               categoryId: category.id,
+              referenceCode: refCode,
             },
           });
 

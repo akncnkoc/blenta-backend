@@ -37,6 +37,10 @@ async function categoryRoutes(fastify) {
                 page: v4_1.default.string().min(1),
                 size: v4_1.default.string().min(1).max(100),
                 search: v4_1.default.string().optional().nullable(), // 🔍 add search param
+                tagIds: v4_1.default
+                    .union([v4_1.default.string(), v4_1.default.array(v4_1.default.string())])
+                    .optional()
+                    .nullable(),
             }),
             summary: "Get All Categories with Pagination",
             response: {
@@ -73,6 +77,13 @@ async function categoryRoutes(fastify) {
             const { lang, page, size, search } = req.query;
             try {
                 const result = await prisma.$transaction(async (tx) => {
+                    let tagIdList = [];
+                    if (typeof req.query.tagIds === "string") {
+                        tagIdList = [req.query.tagIds];
+                    }
+                    else if (Array.isArray(req.query.tagIds)) {
+                        tagIdList = req.query.tagIds;
+                    }
                     const whereClause = {
                         culture: lang,
                         ...(search
@@ -80,6 +91,17 @@ async function categoryRoutes(fastify) {
                                 name: {
                                     contains: search,
                                     mode: client_1.Prisma.QueryMode.insensitive,
+                                },
+                            }
+                            : {}),
+                        ...(tagIdList.length > 0
+                            ? {
+                                categoryTags: {
+                                    some: {
+                                        tagId: {
+                                            in: tagIdList,
+                                        },
+                                    },
                                 },
                             }
                             : {}),
@@ -275,26 +297,29 @@ async function categoryRoutes(fastify) {
             body: v4_1.default.object({
                 name: v4_1.default.string(),
                 description: v4_1.default.string().nullable(),
-                parentCategoryId: v4_1.default.string(),
+                parentCategoryId: v4_1.default.string().nullable(),
                 culture: v4_1.default.string(),
                 color: v4_1.default.string(),
                 isPremiumCat: v4_1.default.boolean(),
                 isRefCat: v4_1.default.boolean(),
+                referenceCode: v4_1.default.string().nullable(),
+                type: v4_1.default.enum(["QUESTION", "TEST"]),
             }),
         },
         handler: async (req, reply) => {
-            const { name, parentCategoryId, culture, color, description, isPremiumCat, isRefCat, } = req.body;
+            const { name, parentCategoryId, culture, color, description, isPremiumCat, isRefCat, type, } = req.body;
             try {
                 const result = await prisma.$transaction(async (tx) => {
                     const createdCategory = await tx.category.create({
                         data: {
                             name,
-                            parentCategoryId,
+                            parentCategoryId: parentCategoryId == "" ? null : parentCategoryId,
                             culture,
                             color,
                             description,
                             isPremiumCat,
                             isRefCat,
+                            type,
                         },
                     });
                     return { category: createdCategory };
@@ -324,11 +349,12 @@ async function categoryRoutes(fastify) {
                 color: v4_1.default.string(),
                 isPremiumCat: v4_1.default.boolean(),
                 isRefCat: v4_1.default.boolean(),
+                type: v4_1.default.enum(["QUESTION", "TEST"]),
             }),
         },
         handler: async (req, reply) => {
             const { id } = req.params;
-            const { name, parentCategoryId, culture, color, description, isPremiumCat, isRefCat, } = req.body;
+            const { name, parentCategoryId, culture, color, description, isPremiumCat, isRefCat, type, } = req.body;
             try {
                 const result = await prisma.$transaction(async (tx) => {
                     const category = await tx.category.findUnique({ where: { id } });
@@ -339,12 +365,13 @@ async function categoryRoutes(fastify) {
                         where: { id },
                         data: {
                             name,
-                            parentCategoryId,
+                            parentCategoryId: parentCategoryId == "" ? null : parentCategoryId,
                             culture,
                             color,
                             description,
                             isPremiumCat,
                             isRefCat,
+                            type,
                         },
                     });
                     return { category: updatedCategory };
@@ -583,14 +610,8 @@ async function categoryRoutes(fastify) {
                     if (!category) {
                         return { code: 404, error: { message: "Category not found" } };
                     }
-                    if (category.referenceCode != refCode) {
-                        return {
-                            code: 409,
-                            error: { message: "Reference code is not match" },
-                        };
-                    }
                     var alreadyExistsReference = await tx.userReferencedCategory.findFirst({
-                        where: { categoryId: id, userId },
+                        where: { categoryId: id, userId, referenceCode: refCode },
                     });
                     if (alreadyExistsReference) {
                         return {
@@ -602,6 +623,7 @@ async function categoryRoutes(fastify) {
                         data: {
                             userId: userId,
                             categoryId: category.id,
+                            referenceCode: refCode,
                         },
                     });
                     return { category: referenceCategory };

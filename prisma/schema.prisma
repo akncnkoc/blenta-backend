@@ -48,6 +48,7 @@ model User {
   userLikedCategories      UserLikedCategory[]
   createdAt                DateTime                 @default(now())
   userReferencedCategories UserReferencedCategory[]
+  referenceCode            String
 
   @@map("users")
 }
@@ -102,7 +103,6 @@ model Category {
   isRefCat                 Boolean                  @default(false)
   type                     CategoryType             @default(QUESTION)
   parentCategory           Category?                @relation("CategoryToCategory", fields: [parentCategoryId], references: [id])
-  referenceCode            String?
   userLikedCategories      UserLikedCategory[]
   userCompletedCategories  UserCompletedCategory[]
   childCategories          Category[]               @relation("CategoryToCategory")
@@ -124,11 +124,12 @@ model CategoryTag {
 }
 
 model UserReferencedCategory {
-  id         String   @id @default(uuid())
-  categoryId String
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  category   Category @relation(fields: [categoryId], references: [id])
+  id            String   @id @default(uuid())
+  categoryId    String
+  userId        String
+  referenceCode String
+  user          User     @relation(fields: [userId], references: [id])
+  category      Category @relation(fields: [categoryId], references: [id])
 
   @@map("user_referenced_categories")
 }
