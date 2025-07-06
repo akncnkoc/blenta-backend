@@ -120,6 +120,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         });
       }
       const oneTimePassCode = String("123456");
+      await prisma.userOneTimeCode.deleteMany({ where: { userId: user.id } });
 
       await prisma.userOneTimeCode.create({
         data: {
@@ -165,6 +166,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         200: z.object({ accessToken: z.string(), isRegistered: z.boolean() }),
         400: z.object({ message: z.string() }),
         404: z.object({ message: z.string() }),
+        409: z.object({ message: z.string() }),
       },
     },
     handler: async (req, reply) => {
@@ -181,7 +183,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
         };
 
         await prisma.$transaction(async (tx) => {
-          // Find the user by email
           const user = await tx.user.findUnique({
             where: { email },
           });
@@ -190,7 +191,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
             throw new Error("UserNotFound");
           }
 
-          // Validate the OTP code
           const otpCodeUser = await tx.userOneTimeCode.findFirst({
             where: {
               userId: user.id,
@@ -202,7 +202,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
             throw new Error("InvalidOtpCode");
           }
 
-          // Create JWT token
+          if (otpCodeUser.expiresAt && otpCodeUser.expiresAt < new Date()) {
+            throw new Error("OtpExpired");
+          }
+
           payload = {
             id: user.id,
             email: user.email,
@@ -214,7 +217,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
           token = req.jwt.sign(payload);
 
-          // Set cookie
           reply.setCookie("access_token", token, {
             path: "/",
             httpOnly: true,
@@ -222,7 +224,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
           });
         });
 
-        // Return token in response body
         return reply
           .code(200)
           .send({ accessToken: token, isRegistered: payload.isRegistered });
@@ -233,6 +234,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
           }
           if (error.message === "InvalidOtpCode") {
             return reply.status(400).send({ message: "Invalid OTP code" });
+          }
+          if (error.message === "OtpExpired") {
+            return reply.status(409).send({ message: "OTP code expired" });
           }
         }
 
@@ -251,29 +255,31 @@ export default async function userRoutes(fastify: FastifyInstance) {
       summary: "Verify Apple And Login",
       body: z.object({
         idToken: z.string(),
+        email: z.string().nullable(),
       }),
       response: {
-        200: z.object({ accessToken: z.string() }),
+        200: z.object({ accessToken: z.string(), isRegistered: z.boolean() }),
         400: z.object({ message: z.string() }),
         404: z.object({ message: z.string() }),
       },
     },
     handler: async (req, reply) => {
-      const { idToken } = req.body;
+      const { idToken, email } = req.body;
 
-      // Apple ID token decode
-      const decoded: any = jsonwebtoken.decode(idToken);
-
-      const appleSub = decoded?.sub;
-      const email = decoded?.email; // Apple bazen e-posta vermez (ilk girişte verir)
-      const name = decoded?.name || null;
-
-      if (!appleSub) {
-        return reply.code(400).send({ message: "Invalid Apple token" });
+      const whereClause = {
+        ...(email
+          ? {
+              email,
+            }
+          : {}),
+      };
+      if (email) {
       }
-
       let user = await prisma.user.findUnique({
-        where: { icloudLoginKey: appleSub },
+        where: {
+          ...whereClause,
+          icloudLoginKey: idToken,
+        },
       });
 
       // ❗ Eğer kullanıcı yoksa oluştur
@@ -281,9 +287,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
         user = await prisma.user.create({
           data: {
             gender: true,
-            icloudLoginKey: appleSub,
-            email: email ?? `apple_${appleSub}@private.appleid.com`, // fallback mail
-            name,
+            icloudLoginKey: idToken,
+            email: !email ? idToken + "@apple.id" : email,
             appEnvironment: "PHONE",
             referenceCode: [...Array(8)]
               .map(() => Math.random().toString(36)[2].toUpperCase())
@@ -310,7 +315,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         sameSite: "strict",
       });
 
-      return { accessToken: token };
+      return { accessToken: token, isRegistered: payload.isRegistered };
     },
   });
   fastify.withTypeProvider<ZodTypeProvider>().route({

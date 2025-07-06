@@ -9,7 +9,6 @@ const client_1 = require("@prisma/client");
 const mailer_1 = require("../../lib/mailer");
 const confirmation_email_1 = require("../../lib/emails/confirmation-email");
 const prisma = new client_1.PrismaClient();
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken")); // NOT your app token, Apple's token decoder
 async function userRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/me",
@@ -108,6 +107,7 @@ async function userRoutes(fastify) {
                 });
             }
             const oneTimePassCode = String("123456");
+            await prisma.userOneTimeCode.deleteMany({ where: { userId: user.id } });
             await prisma.userOneTimeCode.create({
                 data: {
                     userId: user.id,
@@ -149,6 +149,7 @@ async function userRoutes(fastify) {
                 200: v4_1.default.object({ accessToken: v4_1.default.string(), isRegistered: v4_1.default.boolean() }),
                 400: v4_1.default.object({ message: v4_1.default.string() }),
                 404: v4_1.default.object({ message: v4_1.default.string() }),
+                409: v4_1.default.object({ message: v4_1.default.string() }),
             },
         },
         handler: async (req, reply) => {
@@ -157,14 +158,12 @@ async function userRoutes(fastify) {
                 let token = "";
                 let payload = {};
                 await prisma.$transaction(async (tx) => {
-                    // Find the user by email
                     const user = await tx.user.findUnique({
                         where: { email },
                     });
                     if (!user) {
                         throw new Error("UserNotFound");
                     }
-                    // Validate the OTP code
                     const otpCodeUser = await tx.userOneTimeCode.findFirst({
                         where: {
                             userId: user.id,
@@ -174,7 +173,9 @@ async function userRoutes(fastify) {
                     if (!otpCodeUser) {
                         throw new Error("InvalidOtpCode");
                     }
-                    // Create JWT token
+                    if (otpCodeUser.expiresAt && otpCodeUser.expiresAt < new Date()) {
+                        throw new Error("OtpExpired");
+                    }
                     payload = {
                         id: user.id,
                         email: user.email,
@@ -184,14 +185,12 @@ async function userRoutes(fastify) {
                         isRegistered: user.isRegistered,
                     };
                     token = req.jwt.sign(payload);
-                    // Set cookie
                     reply.setCookie("access_token", token, {
                         path: "/",
                         httpOnly: true,
                         secure: true,
                     });
                 });
-                // Return token in response body
                 return reply
                     .code(200)
                     .send({ accessToken: token, isRegistered: payload.isRegistered });
@@ -203,6 +202,9 @@ async function userRoutes(fastify) {
                     }
                     if (error.message === "InvalidOtpCode") {
                         return reply.status(400).send({ message: "Invalid OTP code" });
+                    }
+                    if (error.message === "OtpExpired") {
+                        return reply.status(409).send({ message: "OTP code expired" });
                     }
                 }
                 console.error("Login failed:", error);
@@ -220,34 +222,38 @@ async function userRoutes(fastify) {
             summary: "Verify Apple And Login",
             body: v4_1.default.object({
                 idToken: v4_1.default.string(),
+                email: v4_1.default.string().nullable(),
             }),
             response: {
-                200: v4_1.default.object({ accessToken: v4_1.default.string() }),
+                200: v4_1.default.object({ accessToken: v4_1.default.string(), isRegistered: v4_1.default.boolean() }),
                 400: v4_1.default.object({ message: v4_1.default.string() }),
                 404: v4_1.default.object({ message: v4_1.default.string() }),
             },
         },
         handler: async (req, reply) => {
-            const { idToken } = req.body;
-            // Apple ID token decode
-            const decoded = jsonwebtoken_1.default.decode(idToken);
-            const appleSub = decoded?.sub;
-            const email = decoded?.email; // Apple bazen e-posta vermez (ilk girişte verir)
-            const name = decoded?.name || null;
-            if (!appleSub) {
-                return reply.code(400).send({ message: "Invalid Apple token" });
+            const { idToken, email } = req.body;
+            const whereClause = {
+                ...(email
+                    ? {
+                        email,
+                    }
+                    : {}),
+            };
+            if (email) {
             }
             let user = await prisma.user.findUnique({
-                where: { icloudLoginKey: appleSub },
+                where: {
+                    ...whereClause,
+                    icloudLoginKey: idToken,
+                },
             });
             // ❗ Eğer kullanıcı yoksa oluştur
             if (!user) {
                 user = await prisma.user.create({
                     data: {
                         gender: true,
-                        icloudLoginKey: appleSub,
-                        email: email ?? `apple_${appleSub}@private.appleid.com`, // fallback mail
-                        name,
+                        icloudLoginKey: idToken,
+                        email: !email ? idToken + "@apple.id" : email,
                         appEnvironment: "PHONE",
                         referenceCode: [...Array(8)]
                             .map(() => Math.random().toString(36)[2].toUpperCase())
@@ -270,7 +276,7 @@ async function userRoutes(fastify) {
                 secure: true,
                 sameSite: "strict",
             });
-            return { accessToken: token };
+            return { accessToken: token, isRegistered: payload.isRegistered };
         },
     });
     fastify.withTypeProvider().route({
