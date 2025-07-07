@@ -141,7 +141,7 @@ model Question {
   categoryId         String
   culture            String
   sort               Int                 @default(1)
-  category           Category            @relation(fields: [categoryId], references: [id])
+  category           Category            @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   userLikedQuestions UserLikedQuestion[]
 
   @@map("questions")
