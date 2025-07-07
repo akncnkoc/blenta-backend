@@ -305,7 +305,6 @@ async function categoryRoutes(fastify) {
                 color: v4_1.default.string(),
                 isPremiumCat: v4_1.default.boolean(),
                 isRefCat: v4_1.default.boolean(),
-                referenceCode: v4_1.default.string().nullable(),
                 type: v4_1.default.enum(["QUESTION", "TEST"]),
             }),
         },
@@ -567,14 +566,14 @@ async function categoryRoutes(fastify) {
                     if (!category) {
                         return { code: 404, error: { message: "Category not found" } };
                     }
-                    const deletedCategory = await tx.category.delete({
-                        where: { id },
-                    });
                     await tx.userLikedCategory.deleteMany({
                         where: { categoryId: id },
                     });
                     await tx.userCompletedCategory.deleteMany({
                         where: { categoryId: id },
+                    });
+                    const deletedCategory = await tx.category.delete({
+                        where: { id },
                     });
                     return { category: deletedCategory };
                 });

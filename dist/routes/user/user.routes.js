@@ -222,7 +222,6 @@ async function userRoutes(fastify) {
             summary: "Verify Apple And Login",
             body: v4_1.default.object({
                 idToken: v4_1.default.string(),
-                email: v4_1.default.string().nullable(),
             }),
             response: {
                 200: v4_1.default.object({ accessToken: v4_1.default.string(), isRegistered: v4_1.default.boolean() }),
@@ -231,19 +230,9 @@ async function userRoutes(fastify) {
             },
         },
         handler: async (req, reply) => {
-            const { idToken, email } = req.body;
-            const whereClause = {
-                ...(email
-                    ? {
-                        email,
-                    }
-                    : {}),
-            };
-            if (email) {
-            }
+            const { idToken } = req.body;
             let user = await prisma.user.findUnique({
                 where: {
-                    ...whereClause,
                     icloudLoginKey: idToken,
                 },
             });
@@ -253,7 +242,7 @@ async function userRoutes(fastify) {
                     data: {
                         gender: true,
                         icloudLoginKey: idToken,
-                        email: !email ? idToken + "@apple.id" : email,
+                        email: idToken + "@apple.id",
                         appEnvironment: "PHONE",
                         referenceCode: [...Array(8)]
                             .map(() => Math.random().toString(36)[2].toUpperCase())
