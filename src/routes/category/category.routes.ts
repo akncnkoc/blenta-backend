@@ -345,7 +345,6 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         color: z.string(),
         isPremiumCat: z.boolean(),
         isRefCat: z.boolean(),
-        referenceCode: z.string().nullable(),
         type: z.enum(["QUESTION", "TEST"]),
       }),
     },
@@ -647,15 +646,16 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
             return { code: 404, error: { message: "Category not found" } };
           }
 
-          const deletedCategory = await tx.category.delete({
-            where: { id },
-          });
-
           await tx.userLikedCategory.deleteMany({
             where: { categoryId: id },
           });
+
           await tx.userCompletedCategory.deleteMany({
             where: { categoryId: id },
+          });
+
+          const deletedCategory = await tx.category.delete({
+            where: { id },
           });
 
           return { category: deletedCategory };

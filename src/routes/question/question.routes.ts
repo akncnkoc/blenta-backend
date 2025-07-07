@@ -284,6 +284,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
           var alreadyLiked = await tx.userLikedQuestion.findFirst({
             where: { questionId: id, userId },
           });
+
           if (alreadyLiked) {
             return { code: 409, error: { message: "Question already liked" } };
           }
