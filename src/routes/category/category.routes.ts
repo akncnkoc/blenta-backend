@@ -214,6 +214,10 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
 
       try {
         const enrichedCategory = await prisma.$transaction(async (tx) => {
+          const admin = await tx.admin.findFirst({
+            where: { id: userId },
+          });
+
           const user = await tx.user.findFirst({
             where: { id: userId },
             include: { userReferencedCategories: true },
@@ -233,23 +237,24 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
             return { code: 404, error: { message: "Category not found" } };
           }
 
-          if (root.isPremiumCat && !user?.isPaidMembership) {
-            return {
-              code: 409,
-              error: { message: "This user has no right to see category" },
-            };
-          }
-
-          if (
-            root.isRefCat &&
-            user?.userReferencedCategories.findIndex(
-              (x) => x.categoryId === root.id,
-            ) === -1
-          ) {
-            return {
-              code: 409,
-              error: { message: "This user has no right to see category" },
-            };
+          if (!admin) {
+            if (root.isPremiumCat && !user?.isPaidMembership) {
+              return {
+                code: 409,
+                error: { message: "This user has no right to see category" },
+              };
+            }
+            if (
+              root.isRefCat &&
+              user?.userReferencedCategories.findIndex(
+                (x) => x.categoryId === root.id,
+              ) === -1
+            ) {
+              return {
+                code: 409,
+                error: { message: "This user has no right to see category" },
+              };
+            }
           }
 
           const enrichCategory = async (
