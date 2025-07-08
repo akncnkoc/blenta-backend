@@ -30,11 +30,16 @@ async function questionRoutes(fastify) {
             const skip = (Number(page) - 1) * Number(limit);
             try {
                 const result = await prisma.$transaction(async (tx) => {
-                    const user = await tx.user.findFirst({
+                    const admin = await tx.admin.findFirst({
                         where: { id: userId },
                     });
-                    if (!user)
-                        return { code: 404, error: { message: "User not found" } };
+                    if (!admin) {
+                        const user = await tx.user.findFirst({
+                            where: { id: userId },
+                        });
+                        if (!user)
+                            return { code: 404, error: { message: "User not found" } };
+                    }
                     const category = await tx.category.findFirst({
                         where: { id: categoryId },
                     });
@@ -128,12 +133,11 @@ async function questionRoutes(fastify) {
                 title: v4_1.default.string().nonempty(),
                 description: v4_1.default.string().nonempty(),
                 categoryId: v4_1.default.string().nonempty(),
-                culture: v4_1.default.string().nonempty(),
                 sort: v4_1.default.number(),
             }),
         },
         handler: async (req, reply) => {
-            const { title, description, categoryId, sort, culture } = req.body;
+            const { title, description, categoryId, sort } = req.body;
             try {
                 const result = await prisma.$transaction(async (tx) => {
                     var category = await tx.category.findFirst({
@@ -146,7 +150,6 @@ async function questionRoutes(fastify) {
                         data: {
                             title,
                             description,
-                            culture,
                             categoryId,
                             sort,
                         },
@@ -174,13 +177,12 @@ async function questionRoutes(fastify) {
                 title: v4_1.default.string().nonempty(),
                 description: v4_1.default.string().nonempty(),
                 categoryId: v4_1.default.string().nonempty(),
-                culture: v4_1.default.string().nonempty(),
                 sort: v4_1.default.number(),
             }),
         },
         handler: async (req, reply) => {
             const { id } = req.params;
-            const { title, description, categoryId, sort, culture } = req.body;
+            const { title, description, categoryId, sort } = req.body;
             try {
                 const result = await prisma.$transaction(async (tx) => {
                     var question = await tx.question.findFirst({ where: { id: id } });
@@ -198,7 +200,6 @@ async function questionRoutes(fastify) {
                         data: {
                             title,
                             description,
-                            culture,
                             categoryId,
                             sort,
                         },
