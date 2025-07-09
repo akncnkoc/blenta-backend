@@ -22,6 +22,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         200: z.object({
           user: z
             .object({
+              id: z.string(),
               name: z.string().nullable(),
               surname: z.string().nullable(),
               email: z.string(),
