@@ -21,6 +21,7 @@ async function userRoutes(fastify) {
                 200: v4_1.default.object({
                     user: v4_1.default
                         .object({
+                        id: v4_1.default.string(),
                         name: v4_1.default.string().nullable(),
                         surname: v4_1.default.string().nullable(),
                         email: v4_1.default.string(),
