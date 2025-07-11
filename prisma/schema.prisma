@@ -23,20 +23,26 @@ enum CategoryType {
 }
 
 model User {
-  id                       String                   @id @default(uuid())
-  name                     String?
-  surname                  String?
-  username                 String?                  @unique
-  email                    String                   @unique
-  phoneNumber              String?
-  age                      String?
-  gender                   Boolean
-  isRegistered             Boolean                  @default(false)
-  password                 String?
-  gmailLoginKey            String?                  @unique
-  icloudLoginKey           String?                  @unique
-  isPaidMembership         Boolean                  @default(false)
-  paidMembershipKey        String?
+  id               String  @id @default(uuid())
+  name             String?
+  surname          String?
+  username         String? @unique
+  email            String  @unique
+  phoneNumber      String?
+  age              String?
+  gender           Boolean
+  isRegistered     Boolean @default(false)
+  password         String?
+  gmailLoginKey    String? @unique
+  icloudLoginKey   String? @unique
+  isPaidMembership Boolean @default(false)
+
+  paidMembershipId      String?
+  membershipRenewedAt   DateTime?
+  membershipExpiresAt   DateTime?
+  memberVendorProductId String?
+  memberStore           String?
+
   role                     Role                     @default(USER)
   onesignalKey             String?
   appEnvironment           AppEnvironment

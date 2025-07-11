@@ -38,6 +38,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         page: z.string().min(1),
         size: z.string().min(1).max(100),
         search: z.string().optional().nullable(), // 🔍 add search param
+        type: z.enum(["QUESTION", "TEST"]).optional().nullable(), // ✅ fix here
         tagIds: z
           .union([z.string(), z.array(z.string())])
           .optional()
@@ -79,7 +80,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
     },
     handler: async (req, reply) => {
       const userId = req.user.id;
-      const { lang, page, size, search } = req.query;
+      const { lang, page, size, type, search } = req.query;
 
       try {
         const result = await prisma.$transaction(async (tx) => {
@@ -109,6 +110,11 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
                       },
                     },
                   },
+                }
+              : {}),
+            ...(type
+              ? {
+                  type: type,
                 }
               : {}),
           };

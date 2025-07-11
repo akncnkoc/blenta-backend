@@ -31,6 +31,15 @@ async function userRoutes(fastify) {
                         isPaidMembership: v4_1.default.boolean(),
                         isRegistered: v4_1.default.boolean(),
                         referenceCode: v4_1.default.string(),
+                        likedQuestions: v4_1.default.array(v4_1.default.object({
+                            id: v4_1.default.string(),
+                            userId: v4_1.default.string(),
+                            questionId: v4_1.default.string(),
+                            question: v4_1.default.object({
+                                id: v4_1.default.string(),
+                                title: v4_1.default.string(),
+                            }),
+                        })),
                         userAnsweredQuestions: v4_1.default.array(v4_1.default.object({
                             id: v4_1.default.string(),
                             userId: v4_1.default.string(),
@@ -46,6 +55,10 @@ async function userRoutes(fastify) {
                             id: v4_1.default.string(),
                             userId: v4_1.default.string(),
                             categoryId: v4_1.default.string(),
+                            category: v4_1.default.object({
+                                id: v4_1.default.string(),
+                                name: v4_1.default.string(),
+                            }),
                         })),
                     })
                         .nullable(),
@@ -58,9 +71,27 @@ async function userRoutes(fastify) {
             let user = await prisma.user.findUnique({
                 where: { id },
                 include: {
-                    likedQuestions: true,
+                    likedQuestions: {
+                        include: {
+                            question: {
+                                select: {
+                                    id: true,
+                                    title: true,
+                                },
+                            },
+                        },
+                    },
                     userAnsweredQuestions: true,
-                    userLikedCategories: true,
+                    userLikedCategories: {
+                        include: {
+                            category: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                },
+                            },
+                        },
+                    },
                     userViewedQuestions: true,
                 },
             });
@@ -68,6 +99,177 @@ async function userRoutes(fastify) {
                 return reply.status(401).send({ message: "Unauthorized" });
             }
             return reply.status(200).send({ user });
+        },
+    });
+    fastify.withTypeProvider().route({
+        url: "/me/liked-categories",
+        method: "GET",
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ["User"],
+            summary: "Get categories liked by current user",
+            response: {
+                200: v4_1.default.object({
+                    categories: v4_1.default.array(v4_1.default.object({
+                        id: v4_1.default.string(),
+                        name: v4_1.default.string(),
+                        description: v4_1.default.string().nullable(),
+                        color: v4_1.default.string(),
+                        isPremiumCat: v4_1.default.boolean(),
+                        isRefCat: v4_1.default.boolean(),
+                        type: v4_1.default.enum(["QUESTION", "TEST"]),
+                    })),
+                }),
+                401: v4_1.default.object({
+                    message: v4_1.default.string(),
+                }),
+            },
+        },
+        handler: async (req, reply) => {
+            const userId = req.user.id;
+            try {
+                const likedCategories = await prisma.userLikedCategory.findMany({
+                    where: { userId },
+                    include: {
+                        category: {
+                            select: {
+                                id: true,
+                                name: true,
+                                description: true,
+                                color: true,
+                                isPremiumCat: true,
+                                isRefCat: true,
+                                type: true,
+                            },
+                        },
+                    },
+                });
+                const categories = likedCategories.map((like) => like.category);
+                reply.code(200).send({ categories });
+            }
+            catch (error) {
+                reply.code(500).send({ message: "Internal Server Error" });
+            }
+        },
+    });
+    fastify.withTypeProvider().route({
+        url: "/me/liked-questions",
+        method: "GET",
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ["User"],
+            summary: "Get questions liked by current user",
+            response: {
+                200: v4_1.default.object({
+                    questions: v4_1.default.array(v4_1.default.object({
+                        id: v4_1.default.string(),
+                        title: v4_1.default.string(),
+                        description: v4_1.default.string().nullable(),
+                        category: v4_1.default.object({
+                            id: v4_1.default.string(),
+                            name: v4_1.default.string(),
+                        }),
+                    })),
+                }),
+                401: v4_1.default.object({
+                    message: v4_1.default.string(),
+                }),
+            },
+        },
+        handler: async (req, reply) => {
+            const userId = req.user.id;
+            try {
+                const likedQuestions = await prisma.userLikedQuestion.findMany({
+                    where: { userId },
+                    include: {
+                        question: {
+                            select: {
+                                id: true,
+                                title: true,
+                                description: true,
+                                category: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                });
+                const questions = likedQuestions
+                    .map((like) => like.question)
+                    .filter((q) => !!q); // güvenlik: null check
+                reply.code(200).send({ questions });
+            }
+            catch (error) {
+                reply.code(500).send({ message: "Internal Server Error" });
+            }
+        },
+    });
+    fastify.withTypeProvider().route({
+        url: "/me/active-membership",
+        method: "POST",
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ["User"],
+            summary: "Update paid membership details for the current user",
+            body: v4_1.default.object({
+                paidMembershipId: v4_1.default.string().min(1),
+                membershipRenewedAt: v4_1.default.coerce.date(), // ISO string de destekler
+                membershipExpiresAt: v4_1.default.coerce.date(),
+                memberVendorProductId: v4_1.default.string().min(1),
+                memberStore: v4_1.default.string().min(1),
+            }),
+            response: {
+                200: v4_1.default.object({
+                    message: v4_1.default.string(),
+                    user: v4_1.default.object({
+                        id: v4_1.default.string(),
+                        isPaidMembership: v4_1.default.boolean(), // 🔄 boolean yap
+                        paidMembershipId: v4_1.default.string().nullable(),
+                        membershipRenewedAt: v4_1.default.date().nullable(),
+                        membershipExpiresAt: v4_1.default.date().nullable(),
+                        memberVendorProductId: v4_1.default.string().nullable(),
+                        memberStore: v4_1.default.string().nullable(),
+                    }),
+                }),
+                401: v4_1.default.object({ message: v4_1.default.string() }),
+                500: v4_1.default.object({ message: v4_1.default.string() }),
+            },
+        },
+        handler: async (req, reply) => {
+            const userId = req.user.id;
+            const { paidMembershipId, membershipRenewedAt, membershipExpiresAt, memberVendorProductId, memberStore, } = req.body;
+            try {
+                const updatedUser = await prisma.user.update({
+                    where: { id: userId },
+                    data: {
+                        isPaidMembership: true,
+                        paidMembershipId,
+                        membershipRenewedAt,
+                        membershipExpiresAt,
+                        memberVendorProductId,
+                        memberStore,
+                    },
+                    select: {
+                        id: true,
+                        isPaidMembership: true,
+                        paidMembershipId: true,
+                        membershipRenewedAt: true,
+                        membershipExpiresAt: true,
+                        memberVendorProductId: true,
+                        memberStore: true,
+                    },
+                });
+                reply.code(200).send({
+                    message: "Membership updated successfully",
+                    user: updatedUser,
+                });
+            }
+            catch (error) {
+                reply.code(500).send({ message: "Internal Server Error" });
+            }
         },
     });
     fastify.withTypeProvider().route({

@@ -32,6 +32,19 @@ export default async function userRoutes(fastify: FastifyInstance) {
               isPaidMembership: z.boolean(),
               isRegistered: z.boolean(),
               referenceCode: z.string(),
+
+              likedQuestions: z.array(
+                z.object({
+                  id: z.string(),
+                  userId: z.string(),
+                  questionId: z.string(),
+                  question: z.object({
+                    id: z.string(),
+                    title: z.string(),
+                  }),
+                }),
+              ),
+
               userAnsweredQuestions: z.array(
                 z.object({
                   id: z.string(),
@@ -39,6 +52,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
                   questionId: z.string(),
                 }),
               ),
+
               userViewedQuestions: z.array(
                 z.object({
                   id: z.string(),
@@ -47,11 +61,16 @@ export default async function userRoutes(fastify: FastifyInstance) {
                   viewedAt: z.date(),
                 }),
               ),
+
               userLikedCategories: z.array(
                 z.object({
                   id: z.string(),
                   userId: z.string(),
                   categoryId: z.string(),
+                  category: z.object({
+                    id: z.string(),
+                    name: z.string(),
+                  }),
                 }),
               ),
             })
@@ -66,9 +85,27 @@ export default async function userRoutes(fastify: FastifyInstance) {
       let user = await prisma.user.findUnique({
         where: { id },
         include: {
-          likedQuestions: true,
+          likedQuestions: {
+            include: {
+              question: {
+                select: {
+                  id: true,
+                  title: true,
+                },
+              },
+            },
+          },
           userAnsweredQuestions: true,
-          userLikedCategories: true,
+          userLikedCategories: {
+            include: {
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
           userViewedQuestions: true,
         },
       });
@@ -80,7 +117,192 @@ export default async function userRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({ user });
     },
   });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/me/liked-categories",
+    method: "GET",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["User"],
+      summary: "Get categories liked by current user",
+      response: {
+        200: z.object({
+          categories: z.array(
+            z.object({
+              id: z.string(),
+              name: z.string(),
+              description: z.string().nullable(),
+              color: z.string(),
+              isPremiumCat: z.boolean(),
+              isRefCat: z.boolean(),
+              type: z.enum(["QUESTION", "TEST"]),
+            }),
+          ),
+        }),
+        401: z.object({
+          message: z.string(),
+        }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
 
+      try {
+        const likedCategories = await prisma.userLikedCategory.findMany({
+          where: { userId },
+          include: {
+            category: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                color: true,
+                isPremiumCat: true,
+                isRefCat: true,
+                type: true,
+              },
+            },
+          },
+        });
+
+        const categories = likedCategories.map((like) => like.category);
+
+        reply.code(200).send({ categories });
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error" });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/me/liked-questions",
+    method: "GET",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["User"],
+      summary: "Get questions liked by current user",
+      response: {
+        200: z.object({
+          questions: z.array(
+            z.object({
+              id: z.string(),
+              title: z.string(),
+              description: z.string().nullable(),
+              category: z.object({
+                id: z.string(),
+                name: z.string(),
+              }),
+            }),
+          ),
+        }),
+        401: z.object({
+          message: z.string(),
+        }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+
+      try {
+        const likedQuestions = await prisma.userLikedQuestion.findMany({
+          where: { userId },
+          include: {
+            question: {
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        const questions = likedQuestions
+          .map((like) => like.question)
+          .filter((q): q is NonNullable<typeof q> => !!q); // güvenlik: null check
+
+        reply.code(200).send({ questions });
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error" });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/me/active-membership",
+    method: "POST",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["User"],
+      summary: "Update paid membership details for the current user",
+      body: z.object({
+        paidMembershipId: z.string().min(1),
+        membershipRenewedAt: z.coerce.date(), // ISO string de destekler
+        membershipExpiresAt: z.coerce.date(),
+        memberVendorProductId: z.string().min(1),
+        memberStore: z.string().min(1),
+      }),
+      response: {
+        200: z.object({
+          message: z.string(),
+          user: z.object({
+            id: z.string(),
+            isPaidMembership: z.boolean(), // 🔄 boolean yap
+            paidMembershipId: z.string().nullable(),
+            membershipRenewedAt: z.date().nullable(),
+            membershipExpiresAt: z.date().nullable(),
+            memberVendorProductId: z.string().nullable(),
+            memberStore: z.string().nullable(),
+          }),
+        }),
+        401: z.object({ message: z.string() }),
+        500: z.object({ message: z.string() }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+      const {
+        paidMembershipId,
+        membershipRenewedAt,
+        membershipExpiresAt,
+        memberVendorProductId,
+        memberStore,
+      } = req.body;
+
+      try {
+        const updatedUser = await prisma.user.update({
+          where: { id: userId },
+          data: {
+            isPaidMembership: true,
+            paidMembershipId,
+            membershipRenewedAt,
+            membershipExpiresAt,
+            memberVendorProductId,
+            memberStore,
+          },
+          select: {
+            id: true,
+            isPaidMembership: true,
+            paidMembershipId: true,
+            membershipRenewedAt: true,
+            membershipExpiresAt: true,
+            memberVendorProductId: true,
+            memberStore: true,
+          },
+        });
+
+        reply.code(200).send({
+          message: "Membership updated successfully",
+          user: updatedUser,
+        });
+      } catch (error) {
+        reply.code(500).send({ message: "Internal Server Error" });
+      }
+    },
+  });
   fastify.withTypeProvider<ZodTypeProvider>().route({
     method: "POST",
     url: "/loginWithUserEmail",

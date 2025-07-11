@@ -277,33 +277,35 @@ export default async function questionRoutes(fastify: FastifyInstance) {
     handler: async (req, reply) => {
       const userId = req.user.id;
       const { id } = req.params;
+
       try {
         const result = await prisma.$transaction(async (tx) => {
-          var question = await tx.question.findFirst({ where: { id: id } });
+          const question = await tx.question.findFirst({ where: { id } });
           if (!question) {
-            return { code: 404, error: { message: "Question not found" } };
+            throw { status: 404, message: "Question not found" };
           }
-          var alreadyLiked = await tx.userLikedQuestion.findFirst({
+
+          const alreadyLiked = await tx.userLikedQuestion.findFirst({
             where: { questionId: id, userId },
           });
 
           if (alreadyLiked) {
-            return { code: 409, error: { message: "Question already liked" } };
+            throw { status: 409, message: "Question already liked" };
           }
 
           const createLikedQuestion = await tx.userLikedQuestion.create({
-            data: {
-              userId,
-              questionId: id,
-            },
+            data: { userId, questionId: id },
           });
 
           return { likedQuestion: createLikedQuestion };
         });
 
-        reply.code(result.code!).send(result);
-      } catch (error) {
-        reply.code(500).send({ message: "Internal Server Error", error });
+        reply.code(200).send(result);
+      } catch (error: any) {
+        const status = error?.status ?? 500;
+        reply.code(status).send({
+          message: error?.message || "Internal Server Error",
+        });
       }
     },
   });
@@ -321,23 +323,26 @@ export default async function questionRoutes(fastify: FastifyInstance) {
     handler: async (req, reply) => {
       const userId = req.user.id;
       const { id } = req.params;
+
       try {
         const result = await prisma.$transaction(async (tx) => {
-          var question = await tx.question.findFirst({ where: { id: id } });
+          const question = await tx.question.findFirst({ where: { id } });
           if (!question) {
-            return { code: 404, error: { message: "Question not found" } };
+            throw { status: 404, message: "Question not found" };
           }
 
           const unlikedQuestion = await tx.userLikedQuestion.deleteMany({
-            where: { questionId: id, userId: userId },
+            where: { questionId: id, userId },
           });
 
           return { unlikedQuestion };
         });
 
-        reply.code(result.code!).send(result);
-      } catch (error) {
-        reply.code(500).send({ message: "Internal Server Error", error });
+        reply.code(200).send(result);
+      } catch (error: any) {
+        const status = error?.status ?? 500;
+        const message = error?.message ?? "Internal Server Error";
+        reply.code(status).send({ message });
       }
     },
   });
