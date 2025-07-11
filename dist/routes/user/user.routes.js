@@ -273,6 +273,39 @@ async function userRoutes(fastify) {
         },
     });
     fastify.withTypeProvider().route({
+        url: "/me/deactivate-membership",
+        method: "DELETE",
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ["User"],
+            summary: "Update paid membership details for the current user",
+            response: {
+                200: v4_1.default.object({
+                    message: v4_1.default.string(),
+                }),
+                401: v4_1.default.object({ message: v4_1.default.string() }),
+                500: v4_1.default.object({ message: v4_1.default.string() }),
+            },
+        },
+        handler: async (req, reply) => {
+            const userId = req.user.id;
+            try {
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: {
+                        isPaidMembership: false,
+                    },
+                });
+                reply.code(200).send({
+                    message: "Membership updated successfully",
+                });
+            }
+            catch (error) {
+                reply.code(500).send({ message: "Internal Server Error" });
+            }
+        },
+    });
+    fastify.withTypeProvider().route({
         method: "POST",
         url: "/loginWithUserEmail",
         schema: {
