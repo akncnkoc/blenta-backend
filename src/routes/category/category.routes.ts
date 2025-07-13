@@ -409,7 +409,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       body: z.object({
         name: z.string(),
         description: z.string().nullable(),
-        parentCategoryId: z.string(),
+        parentCategoryId: z.string().nullable(),
         culture: z.string(),
         color: z.string(),
         isPremiumCat: z.boolean(),

@@ -357,7 +357,7 @@ async function categoryRoutes(fastify) {
             body: v4_1.default.object({
                 name: v4_1.default.string(),
                 description: v4_1.default.string().nullable(),
-                parentCategoryId: v4_1.default.string(),
+                parentCategoryId: v4_1.default.string().nullable(),
                 culture: v4_1.default.string(),
                 color: v4_1.default.string(),
                 isPremiumCat: v4_1.default.boolean(),

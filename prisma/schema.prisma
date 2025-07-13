@@ -55,6 +55,7 @@ model User {
   createdAt                DateTime                 @default(now())
   userReferencedCategories UserReferencedCategory[]
   referenceCode            String
+  userAppVersion           String?
 
   @@map("users")
 }

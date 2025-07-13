@@ -31,6 +31,7 @@ async function userRoutes(fastify) {
                         isPaidMembership: v4_1.default.boolean(),
                         isRegistered: v4_1.default.boolean(),
                         referenceCode: v4_1.default.string(),
+                        userAppVersion: v4_1.default.string().nullable(),
                         likedQuestions: v4_1.default.array(v4_1.default.object({
                             id: v4_1.default.string(),
                             userId: v4_1.default.string(),
@@ -502,6 +503,46 @@ async function userRoutes(fastify) {
                 sameSite: "strict",
             });
             return { accessToken: token, isRegistered: payload.isRegistered };
+        },
+    });
+    fastify.withTypeProvider().route({
+        url: "/updateAppVersion",
+        method: "PUT",
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ["User"],
+            summary: "Update user app version",
+            body: v4_1.default.object({
+                versionCode: v4_1.default.string().max(20), // adjust length/format as needed
+            }),
+            response: {
+                200: v4_1.default.object({ message: v4_1.default.string() }),
+            },
+        },
+        handler: async (req, reply) => {
+            const userId = req.user.id;
+            const { versionCode } = req.body;
+            try {
+                const user = await prisma.user.findUnique({
+                    where: { id: userId },
+                });
+                if (!user) {
+                    return reply.code(404).send({ message: "User not found" });
+                }
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: {
+                        userAppVersion: versionCode,
+                    },
+                });
+                return reply.code(200).send({ message: "App version updated" });
+            }
+            catch (error) {
+                console.error("App version update failed:", error);
+                return reply
+                    .code(500)
+                    .send({ message: "An error occurred while updating app version" });
+            }
         },
     });
     fastify.withTypeProvider().route({

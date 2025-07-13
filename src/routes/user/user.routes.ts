@@ -32,7 +32,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
               isPaidMembership: z.boolean(),
               isRegistered: z.boolean(),
               referenceCode: z.string(),
-
+              userAppVersion: z.string().nullable(),
               likedQuestions: z.array(
                 z.object({
                   id: z.string(),
@@ -563,6 +563,49 @@ export default async function userRoutes(fastify: FastifyInstance) {
       });
 
       return { accessToken: token, isRegistered: payload.isRegistered };
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/updateAppVersion",
+    method: "PUT",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["User"],
+      summary: "Update user app version",
+      body: z.object({
+        versionCode: z.string().max(20), // adjust length/format as needed
+      }),
+      response: {
+        200: z.object({ message: z.string() }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+      const { versionCode } = req.body;
+
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+        });
+
+        if (!user) {
+          return reply.code(404).send({ message: "User not found" });
+        }
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            userAppVersion: versionCode,
+          },
+        });
+
+        return reply.code(200).send({ message: "App version updated" });
+      } catch (error) {
+        console.error("App version update failed:", error);
+        return reply
+          .code(500)
+          .send({ message: "An error occurred while updating app version" });
+      }
     },
   });
   fastify.withTypeProvider<ZodTypeProvider>().route({
