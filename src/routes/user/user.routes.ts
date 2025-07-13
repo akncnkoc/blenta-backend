@@ -8,7 +8,6 @@ import {
   confirmationEmailTr,
 } from "../../lib/emails/confirmation-email";
 const prisma = new PrismaClient();
-import jsonwebtoken from "jsonwebtoken"; // NOT your app token, Apple's token decoder
 
 export default async function userRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
@@ -27,7 +26,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
               surname: z.string().nullable(),
               email: z.string(),
               phoneNumber: z.string().nullable(),
-              gender: z.boolean(),
+              gender: z.enum(["MAN", "WOMAN", "UNKNOWN"]),
               age: z.string().nullable(),
               isPaidMembership: z.boolean(),
               isRegistered: z.boolean(),
@@ -370,7 +369,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
             password: "",
             role: "USER",
             appEnvironment: "PHONE",
-            gender: true,
+            gender: "UNKNOWN",
             referenceCode: [...Array(8)]
               .map(() => Math.random().toString(36)[2].toUpperCase())
               .join(""),
@@ -533,7 +532,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       if (!user) {
         user = await prisma.user.create({
           data: {
-            gender: true,
+            gender: "UNKNOWN",
             icloudLoginKey: idToken,
             email: idToken + "@apple.id",
             appEnvironment: "PHONE",
@@ -620,7 +619,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         surname: z.string().max(50),
         age: z.string(),
         phoneNumber: z.string(),
-        gender: z.boolean(),
+        gender: z.enum(["MAN", "WOMAN", "UNKNOWN"]),
       }),
       response: {
         200: z.object({ message: z.string() }),

@@ -26,7 +26,7 @@ async function userRoutes(fastify) {
                         surname: v4_1.default.string().nullable(),
                         email: v4_1.default.string(),
                         phoneNumber: v4_1.default.string().nullable(),
-                        gender: v4_1.default.boolean(),
+                        gender: v4_1.default.enum(["MAN", "WOMAN", "UNKNOWN"]),
                         age: v4_1.default.string().nullable(),
                         isPaidMembership: v4_1.default.boolean(),
                         isRegistered: v4_1.default.boolean(),
@@ -336,7 +336,7 @@ async function userRoutes(fastify) {
                         password: "",
                         role: "USER",
                         appEnvironment: "PHONE",
-                        gender: true,
+                        gender: "UNKNOWN",
                         referenceCode: [...Array(8)]
                             .map(() => Math.random().toString(36)[2].toUpperCase())
                             .join(""),
@@ -477,7 +477,7 @@ async function userRoutes(fastify) {
             if (!user) {
                 user = await prisma.user.create({
                     data: {
-                        gender: true,
+                        gender: "UNKNOWN",
                         icloudLoginKey: idToken,
                         email: idToken + "@apple.id",
                         appEnvironment: "PHONE",
@@ -557,7 +557,7 @@ async function userRoutes(fastify) {
                 surname: v4_1.default.string().max(50),
                 age: v4_1.default.string(),
                 phoneNumber: v4_1.default.string(),
-                gender: v4_1.default.boolean(),
+                gender: v4_1.default.enum(["MAN", "WOMAN", "UNKNOWN"]),
             }),
             response: {
                 200: v4_1.default.object({ message: v4_1.default.string() }),
