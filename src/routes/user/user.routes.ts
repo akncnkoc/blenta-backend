@@ -2,11 +2,12 @@ import { FastifyInstance } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import z from "zod/v4";
 import { PrismaClient } from "@prisma/client";
-import { getMailClient } from "../../lib/mailer";
+// import { getMailClient } from "../../lib/mailer";
 import {
   confirmationEmailEn,
   confirmationEmailTr,
 } from "../../lib/emails/confirmation-email";
+import { addDays, addHours } from "date-fns";
 const prisma = new PrismaClient();
 
 export default async function userRoutes(fastify: FastifyInstance) {
@@ -29,6 +30,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
               gender: z.enum(["MAN", "WOMAN", "UNKNOWN"]),
               age: z.string().nullable(),
               isPaidMembership: z.boolean(),
+              promotionExpiresAt: z.string().nullable(),
               isRegistered: z.boolean(),
               referenceCode: z.string(),
               userAppVersion: z.string().nullable(),
@@ -81,39 +83,59 @@ export default async function userRoutes(fastify: FastifyInstance) {
     handler: async (req, reply) => {
       const { id } = req.user;
 
-      let user = await prisma.user.findUnique({
-        where: { id },
-        include: {
-          likedQuestions: {
-            include: {
-              question: {
-                select: {
-                  id: true,
-                  title: true,
+      const [user, activePromotionCode] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id },
+          include: {
+            likedQuestions: {
+              include: {
+                question: {
+                  select: {
+                    id: true,
+                    title: true,
+                  },
                 },
               },
             },
-          },
-          userAnsweredQuestions: true,
-          userLikedCategories: {
-            include: {
-              category: {
-                select: {
-                  id: true,
-                  name: true,
+            userAnsweredQuestions: true,
+            userLikedCategories: {
+              include: {
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
                 },
               },
             },
+            userViewedQuestions: true,
           },
-          userViewedQuestions: true,
-        },
-      });
+        }),
+        prisma.userPromotionCode.findFirst({
+          where: {
+            userId: id,
+            expiresAt: {
+              gt: new Date(),
+            },
+          },
+        }),
+      ]);
 
       if (!user) {
         return reply.status(401).send({ message: "Unauthorized" });
       }
 
-      return reply.status(200).send({ user });
+      const isPaidMembership = !!activePromotionCode;
+      const promotionExpiresAt =
+        activePromotionCode?.expiresAt?.toISOString() ?? null;
+
+      return reply.status(200).send({
+        user: {
+          ...user,
+          isPaidMembership,
+          promotionExpiresAt,
+        },
+      });
     },
   });
   fastify.withTypeProvider<ZodTypeProvider>().route({
@@ -387,7 +409,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         },
       });
 
-      const mail = await getMailClient();
+      // const mail = await getMailClient();
       const mailTemp =
         lang === "en"
           ? confirmationEmailEn(email, oneTimePassCode)
@@ -658,6 +680,110 @@ export default async function userRoutes(fastify: FastifyInstance) {
           return reply.code(404).send({ message: "User not found" });
         }
 
+        console.error("Update failed:", error);
+        return reply
+          .code(500)
+          .send({ message: "An error occurred during update" });
+      }
+    },
+  });
+
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/active-promotion-code",
+    method: "PUT",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["User"],
+      summary: "Active promotion code for user",
+      body: z.object({
+        code: z.string(),
+      }),
+      response: {
+        200: z.object({ message: z.string() }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+
+      const { code } = req.body;
+      try {
+        await prisma.$transaction(async (tx) => {
+          const user = await tx.user.findUnique({
+            where: { id: userId },
+          });
+
+          if (!user) {
+            throw new Error("UserNotFound");
+          }
+
+          var promotionCode = await tx.promotionCode.findFirst({
+            where: { code: code },
+          });
+          if (!promotionCode) {
+            throw new Error("PromotionCodeNotFound");
+          }
+
+          var promotionCodeExists = await tx.userPromotionCode.findFirst({
+            where: {
+              userId,
+              promotionCodeId: promotionCode.id,
+            },
+          });
+          if (promotionCodeExists) {
+            throw new Error("PromotionCodeAlreadyUsed");
+          }
+
+          const now = new Date();
+          const extraTimeStr = promotionCode.extraTime; // e.g. "34"
+
+          // Parse string to integer
+          const extraTime = parseInt(extraTimeStr, 10);
+
+          if (isNaN(extraTime)) {
+            throw new Error(`Invalid extraTime: ${extraTimeStr}`);
+          }
+
+          const daysToAdd = Math.floor(extraTime / 24);
+          const hoursToAdd = extraTime % 24;
+
+          let expiresAt = now;
+          if (daysToAdd > 0) {
+            expiresAt = addDays(expiresAt, daysToAdd);
+          }
+          if (hoursToAdd > 0) {
+            expiresAt = addHours(expiresAt, hoursToAdd);
+          }
+
+          await tx.userPromotionCode.create({
+            data: {
+              userId,
+              promotionCodeId: promotionCode.id,
+              expiresAt,
+            },
+          });
+        });
+
+        return reply.code(200).send({ message: "User updated" });
+      } catch (error) {
+        if (error instanceof Error && error.message === "UserNotFound") {
+          return reply.code(404).send({ message: "User not found" });
+        }
+
+        if (
+          error instanceof Error &&
+          error.message === "PromotionCodeNotFound"
+        ) {
+          return reply.code(404).send({ message: "Promotion Code not found" });
+        }
+
+        if (
+          error instanceof Error &&
+          error.message === "PromotionCodeAlreadyUsed"
+        ) {
+          return reply
+            .code(409)
+            .send({ message: "Promotion Code already used" });
+        }
         console.error("Update failed:", error);
         return reply
           .code(500)

@@ -19,6 +19,7 @@ import {
 import fastifyCors from "@fastify/cors";
 import adminRoutes from "./routes/admin/admin.routes";
 import tagRoutes from "./routes/tag/tag.routes";
+import promotionCodeRoutes from "./routes/promotion-code/promotion-code.routes";
 
 const fastify = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>();
 const start = async () => {
@@ -78,6 +79,7 @@ const start = async () => {
     fastify.register(userRoutes, { prefix: "/user" });
     fastify.register(categoryRoutes, { prefix: "/category" });
     fastify.register(tagRoutes, { prefix: "/tag" });
+    fastify.register(promotionCodeRoutes, { prefix: "/promotion-code" });
     fastify.register(questionRoutes, { prefix: "/question" });
     fastify.register(adminRoutes, { prefix: "/admin" });
     fastify.get("/healthcheck", (req, res) => {
