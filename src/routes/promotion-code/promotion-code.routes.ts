@@ -24,6 +24,7 @@ export default async function promotionCodeRoutes(fastify: FastifyInstance) {
               id: z.string(),
               code: z.string(),
               extraTime: z.string(),
+              alreadyUsed: z.boolean(),
             }),
           ),
           meta: z.object({
@@ -37,6 +38,7 @@ export default async function promotionCodeRoutes(fastify: FastifyInstance) {
       },
     },
     handler: async (req, reply) => {
+      const userId = req.user.id;
       const { page, size, search } = req.query;
 
       try {
@@ -52,24 +54,42 @@ export default async function promotionCodeRoutes(fastify: FastifyInstance) {
               : {}),
           };
 
-          const [total, promotionCodes] = await Promise.all([
-            tx.promotionCode.count({
-              where: {
-                ...whereClause,
-              },
-            }),
+          const [total, promotionCodes, usedCodes] = await Promise.all([
+            tx.promotionCode.count({ where: whereClause }),
             tx.promotionCode.findMany({
-              where: {
-                ...whereClause,
-              },
+              where: whereClause,
               skip: (Number(page) - 1) * Number(size),
               take: Number(size),
               orderBy: { code: "asc" },
             }),
+            tx.userPromotionCode.findMany({
+              where: {
+                promotionCodeId: {
+                  in: (
+                    await tx.promotionCode.findMany({
+                      where: whereClause,
+                      select: { id: true },
+                      skip: (Number(page) - 1) * Number(size),
+                      take: Number(size),
+                    })
+                  ).map((p) => p.id),
+                },
+              },
+              select: { promotionCodeId: true },
+            }),
           ]);
 
+          const usedCodeIds = new Set(usedCodes.map((u) => u.promotionCodeId));
+
+          const data = promotionCodes.map((code) => ({
+            id: code.id,
+            code: code.code,
+            extraTime: code.extraTime,
+            alreadyUsed: usedCodeIds.has(code.id),
+          }));
+
           return {
-            data: promotionCodes,
+            data,
             meta: {
               total,
               page,

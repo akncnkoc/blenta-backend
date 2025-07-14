@@ -123,6 +123,7 @@ model Category {
   questions                Question[]
   userReferencedCategories UserReferencedCategory[]
   categoryTags             CategoryTag[]
+  sort                     Int @default(1)
 
   @@map("categories")
 }

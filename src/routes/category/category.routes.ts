@@ -11,6 +11,7 @@ const CategorySchema: z.ZodType<any> = z.lazy(() =>
     parentCategoryId: z.string().nullable(),
     culture: z.string(),
     color: z.string(),
+    sort: z.number(),
     isPremiumCat: z.boolean(),
     isRefCat: z.boolean(),
     type: z.enum(["QUESTION", "TEST"]),
@@ -55,6 +56,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               parentCategoryId: z.string().nullable(),
               culture: z.string(),
               color: z.string(),
+              sort: z.number(),
               isPremiumCat: z.boolean(),
               isRefCat: z.boolean(),
               questionCount: z.number(),
@@ -146,7 +148,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
                 },
                 skip: (Number(page) - 1) * Number(size),
                 take: Number(size),
-                orderBy: { name: "asc" },
+                orderBy: { sort: "asc" },
               }),
               tx.userLikedCategory.findMany({
                 where: { userId },
@@ -318,6 +320,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               color: category.color,
               isPremiumCat: category.isPremiumCat,
               isRefCat: category.isRefCat,
+              sort: category.sort,
               type: category.type,
               questionCount,
               isCategoryLiked: !!isLiked,
@@ -353,6 +356,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         description: z.string().nullable(),
         parentCategoryId: z.string().nullable(),
         culture: z.string(),
+        sort: z.number(),
         color: z.string(),
         isPremiumCat: z.boolean(),
         isRefCat: z.boolean(),
@@ -365,6 +369,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         parentCategoryId,
         culture,
         color,
+        sort,
         description,
         isPremiumCat,
         isRefCat,
@@ -376,6 +381,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           const createdCategory = await tx.category.create({
             data: {
               name,
+              sort,
               parentCategoryId:
                 parentCategoryId == "" ? null : parentCategoryId,
               culture,
@@ -411,6 +417,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         description: z.string().nullable(),
         parentCategoryId: z.string().nullable(),
         culture: z.string(),
+        sort: z.number(),
         color: z.string(),
         isPremiumCat: z.boolean(),
         isRefCat: z.boolean(),
@@ -424,6 +431,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
         parentCategoryId,
         culture,
         color,
+        sort,
         description,
         isPremiumCat,
         isRefCat,
@@ -441,6 +449,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
             where: { id },
             data: {
               name,
+              sort,
               parentCategoryId:
                 parentCategoryId == "" ? null : parentCategoryId,
               culture,

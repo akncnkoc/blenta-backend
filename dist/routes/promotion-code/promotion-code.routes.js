@@ -26,6 +26,7 @@ async function promotionCodeRoutes(fastify) {
                         id: v4_1.default.string(),
                         code: v4_1.default.string(),
                         extraTime: v4_1.default.string(),
+                        alreadyUsed: v4_1.default.boolean(),
                     })),
                     meta: v4_1.default.object({
                         total: v4_1.default.number(),
@@ -38,6 +39,7 @@ async function promotionCodeRoutes(fastify) {
             },
         },
         handler: async (req, reply) => {
+            const userId = req.user.id;
             const { page, size, search } = req.query;
             try {
                 const result = await prisma.$transaction(async (tx) => {
@@ -51,23 +53,37 @@ async function promotionCodeRoutes(fastify) {
                             }
                             : {}),
                     };
-                    const [total, promotionCodes] = await Promise.all([
-                        tx.promotionCode.count({
-                            where: {
-                                ...whereClause,
-                            },
-                        }),
+                    const [total, promotionCodes, usedCodes] = await Promise.all([
+                        tx.promotionCode.count({ where: whereClause }),
                         tx.promotionCode.findMany({
-                            where: {
-                                ...whereClause,
-                            },
+                            where: whereClause,
                             skip: (Number(page) - 1) * Number(size),
                             take: Number(size),
                             orderBy: { code: "asc" },
                         }),
+                        tx.userPromotionCode.findMany({
+                            where: {
+                                promotionCodeId: {
+                                    in: (await tx.promotionCode.findMany({
+                                        where: whereClause,
+                                        select: { id: true },
+                                        skip: (Number(page) - 1) * Number(size),
+                                        take: Number(size),
+                                    })).map((p) => p.id),
+                                },
+                            },
+                            select: { promotionCodeId: true },
+                        }),
                     ]);
+                    const usedCodeIds = new Set(usedCodes.map((u) => u.promotionCodeId));
+                    const data = promotionCodes.map((code) => ({
+                        id: code.id,
+                        code: code.code,
+                        extraTime: code.extraTime,
+                        alreadyUsed: usedCodeIds.has(code.id),
+                    }));
                     return {
-                        data: promotionCodes,
+                        data,
                         meta: {
                             total,
                             page,

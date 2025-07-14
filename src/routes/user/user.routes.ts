@@ -125,7 +125,13 @@ export default async function userRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ message: "Unauthorized" });
       }
 
-      const isPaidMembership = !!activePromotionCode;
+      // First check membershipExpiresAt
+      const now = new Date();
+      const hasValidMembership =
+        user.membershipExpiresAt && new Date(user.membershipExpiresAt) > now;
+
+      // Determine membership status
+      const isPaidMembership = hasValidMembership || !!activePromotionCode;
       const promotionExpiresAt =
         activePromotionCode?.expiresAt?.toISOString() ?? null;
 
@@ -348,6 +354,11 @@ export default async function userRoutes(fastify: FastifyInstance) {
           where: { id: userId },
           data: {
             isPaidMembership: false,
+            paidMembershipId: "",
+            membershipRenewedAt: null,
+            membershipExpiresAt: null,
+            memberVendorProductId: "",
+            memberStore: "",
           },
         });
 
@@ -716,6 +727,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
             throw new Error("UserNotFound");
           }
 
+          if (user.isPaidMembership) {
+            throw new Error("UserAlreadyMember");
+          }
+
           var promotionCode = await tx.promotionCode.findFirst({
             where: { code: code },
           });
@@ -725,7 +740,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
           var promotionCodeExists = await tx.userPromotionCode.findFirst({
             where: {
-              userId,
               promotionCodeId: promotionCode.id,
             },
           });
@@ -767,6 +781,12 @@ export default async function userRoutes(fastify: FastifyInstance) {
       } catch (error) {
         if (error instanceof Error && error.message === "UserNotFound") {
           return reply.code(404).send({ message: "User not found" });
+        }
+        if (error instanceof Error && error.message === "UserAlreadyMember") {
+          return reply.code(409).send({
+            message:
+              "Cannot use promotion code beacuse already membership activated",
+          });
         }
 
         if (

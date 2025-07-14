@@ -14,6 +14,7 @@ const CategorySchema = v4_1.default.lazy(() => v4_1.default.object({
     parentCategoryId: v4_1.default.string().nullable(),
     culture: v4_1.default.string(),
     color: v4_1.default.string(),
+    sort: v4_1.default.number(),
     isPremiumCat: v4_1.default.boolean(),
     isRefCat: v4_1.default.boolean(),
     type: v4_1.default.enum(["QUESTION", "TEST"]),
@@ -54,6 +55,7 @@ async function categoryRoutes(fastify) {
                         parentCategoryId: v4_1.default.string().nullable(),
                         culture: v4_1.default.string(),
                         color: v4_1.default.string(),
+                        sort: v4_1.default.number(),
                         isPremiumCat: v4_1.default.boolean(),
                         isRefCat: v4_1.default.boolean(),
                         questionCount: v4_1.default.number(),
@@ -139,7 +141,7 @@ async function categoryRoutes(fastify) {
                             },
                             skip: (Number(page) - 1) * Number(size),
                             take: Number(size),
-                            orderBy: { name: "asc" },
+                            orderBy: { sort: "asc" },
                         }),
                         tx.userLikedCategory.findMany({
                             where: { userId },
@@ -280,6 +282,7 @@ async function categoryRoutes(fastify) {
                             color: category.color,
                             isPremiumCat: category.isPremiumCat,
                             isRefCat: category.isRefCat,
+                            sort: category.sort,
                             type: category.type,
                             questionCount,
                             isCategoryLiked: !!isLiked,
@@ -313,6 +316,7 @@ async function categoryRoutes(fastify) {
                 description: v4_1.default.string().nullable(),
                 parentCategoryId: v4_1.default.string().nullable(),
                 culture: v4_1.default.string(),
+                sort: v4_1.default.number(),
                 color: v4_1.default.string(),
                 isPremiumCat: v4_1.default.boolean(),
                 isRefCat: v4_1.default.boolean(),
@@ -320,12 +324,13 @@ async function categoryRoutes(fastify) {
             }),
         },
         handler: async (req, reply) => {
-            const { name, parentCategoryId, culture, color, description, isPremiumCat, isRefCat, type, } = req.body;
+            const { name, parentCategoryId, culture, color, sort, description, isPremiumCat, isRefCat, type, } = req.body;
             try {
                 const result = await prisma.$transaction(async (tx) => {
                     const createdCategory = await tx.category.create({
                         data: {
                             name,
+                            sort,
                             parentCategoryId: parentCategoryId == "" ? null : parentCategoryId,
                             culture,
                             color,
@@ -359,6 +364,7 @@ async function categoryRoutes(fastify) {
                 description: v4_1.default.string().nullable(),
                 parentCategoryId: v4_1.default.string().nullable(),
                 culture: v4_1.default.string(),
+                sort: v4_1.default.number(),
                 color: v4_1.default.string(),
                 isPremiumCat: v4_1.default.boolean(),
                 isRefCat: v4_1.default.boolean(),
@@ -367,7 +373,7 @@ async function categoryRoutes(fastify) {
         },
         handler: async (req, reply) => {
             const { id } = req.params;
-            const { name, parentCategoryId, culture, color, description, isPremiumCat, isRefCat, type, } = req.body;
+            const { name, parentCategoryId, culture, color, sort, description, isPremiumCat, isRefCat, type, } = req.body;
             try {
                 const result = await prisma.$transaction(async (tx) => {
                     const category = await tx.category.findUnique({ where: { id } });
@@ -378,6 +384,7 @@ async function categoryRoutes(fastify) {
                         where: { id },
                         data: {
                             name,
+                            sort,
                             parentCategoryId: parentCategoryId == "" ? null : parentCategoryId,
                             culture,
                             color,
