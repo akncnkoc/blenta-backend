@@ -29,19 +29,20 @@ enum UserGender {
 }
 
 model User {
-  id               String     @id @default(uuid())
-  name             String?
-  surname          String?
-  username         String?    @unique
-  email            String     @unique
-  phoneNumber      String?
-  age              String?
-  gender           UserGender
-  isRegistered     Boolean    @default(false)
-  password         String?
-  gmailLoginKey    String?    @unique
-  icloudLoginKey   String?    @unique
-  isPaidMembership Boolean    @default(false)
+  id                String     @id @default(uuid())
+  name              String?
+  surname           String?
+  username          String?    @unique
+  email             String     @unique
+  phoneNumber       String?
+  age               String?
+  gender            UserGender
+  isRegistered      Boolean    @default(false)
+  password          String?
+  gmailLoginKey     String?    @unique
+  icloudLoginKey    String?    @unique
+  isPaidMembership  Boolean    @default(false)
+  isUserDeactivated Boolean    @default(false)
 
   paidMembershipId      String?
   membershipRenewedAt   DateTime?
@@ -123,7 +124,7 @@ model Category {
   questions                Question[]
   userReferencedCategories UserReferencedCategory[]
   categoryTags             CategoryTag[]
-  sort                     Int @default(1)
+  sort                     Int                      @default(1)
 
   @@map("categories")
 }

@@ -125,6 +125,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ message: "Unauthorized" });
       }
 
+      if (user.isUserDeactivated) {
+        return reply.status(409).send({ message: "User Deactivated" });
+      }
+
       // First check membershipExpiresAt
       const now = new Date();
       const hasValidMembership =
@@ -409,6 +413,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
           },
         });
       }
+
+      if (user.isUserDeactivated) {
+        return reply.status(409).send({ message: "User Deactivated" });
+      }
       const oneTimePassCode = String("123456");
       await prisma.userOneTimeCode.deleteMany({ where: { userId: user.id } });
 
@@ -470,6 +478,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
           surname: string | null;
           role: string;
           isRegistered: boolean;
+          isDeactivated: boolean;
         };
 
         await prisma.$transaction(async (tx) => {
@@ -479,6 +488,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
           if (!user) {
             throw new Error("UserNotFound");
+          }
+
+          if (user.isUserDeactivated) {
+            return reply.status(409).send({ message: "User Deactivated" });
           }
 
           const otpCodeUser = await tx.userOneTimeCode.findFirst({
@@ -503,8 +516,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
             surname: user.surname,
             role: user.role,
             isRegistered: user.isRegistered,
+            isDeactivated: user.isUserDeactivated,
           };
-
           token = req.jwt.sign(payload);
 
           reply.setCookie("access_token", token, {
@@ -576,6 +589,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
         });
       }
 
+      if (user.isUserDeactivated) {
+        return reply.status(409).send({ message: "User Deactivated" });
+      }
+
       const payload = {
         id: user.id,
         email: user.email,
@@ -583,6 +600,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         surname: user.surname,
         role: user.role,
         isRegistered: user.isRegistered,
+        isDeactivated: user.isUserDeactivated,
       };
 
       const token = req.jwt.sign(payload);
@@ -634,6 +652,48 @@ export default async function userRoutes(fastify: FastifyInstance) {
         return reply.code(200).send({ message: "App version updated" });
       } catch (error) {
         console.error("App version update failed:", error);
+        return reply
+          .code(500)
+          .send({ message: "An error occurred while updating app version" });
+      }
+    },
+  });
+
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/deactivate-user",
+    method: "PUT",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["User"],
+      summary: "Deactivate current user",
+      response: {
+        200: z.object({ message: z.string() }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+        });
+
+        if (!user) {
+          return reply.code(404).send({ message: "User not found" });
+        }
+        if (user.isUserDeactivated) {
+          return reply.code(409).send({ message: "User already deactivated" });
+        }
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            isUserDeactivated: true,
+          },
+        });
+
+        return reply.code(200).send({ message: "User deactivated" });
+      } catch (error) {
         return reply
           .code(500)
           .send({ message: "An error occurred while updating app version" });

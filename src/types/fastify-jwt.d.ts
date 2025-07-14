@@ -10,12 +10,14 @@ declare module "@fastify/jwt" {
       email: string;
       role: string;
       isRegistered: boolean;
+      isDeactivated: boolean;
     };
     user: {
       id: string;
       name: string;
       surname: string;
       email: string;
+      isDeactivated: boolean;
     };
   }
 }
