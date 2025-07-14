@@ -627,6 +627,10 @@ async function categoryRoutes(fastify) {
             const { refCode } = req.body;
             try {
                 const result = await prisma.$transaction(async (tx) => {
+                    const user = await tx.user.findUnique({ where: { id: userId } });
+                    if (!user) {
+                        return { code: 404, error: { message: "user not found" } };
+                    }
                     const category = await tx.category.findUnique({ where: { id } });
                     if (!category) {
                         return { code: 404, error: { message: "Category not found" } };
@@ -638,6 +642,12 @@ async function categoryRoutes(fastify) {
                         return {
                             code: 409,
                             error: { message: "Reference code not found" },
+                        };
+                    }
+                    if (user.referenceCode == refCode) {
+                        return {
+                            code: 409,
+                            error: { message: "Reference code must not be same as user has" },
                         };
                     }
                     var alreadyExistsReference = await tx.userReferencedCategory.findFirst({
