@@ -258,6 +258,7 @@ async function categoryRoutes(fastify) {
                             }),
                             tx.category.findMany({
                                 where: { parentCategoryId: category.id },
+                                orderBy: { sort: "asc" },
                             }),
                         ]);
                         const childEnriched = await Promise.all(children.map((child) => tx.category

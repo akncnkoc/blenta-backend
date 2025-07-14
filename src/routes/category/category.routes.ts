@@ -290,6 +290,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               }),
               tx.category.findMany({
                 where: { parentCategoryId: category.id },
+                orderBy: { sort: "asc" },
               }),
             ]);
 
