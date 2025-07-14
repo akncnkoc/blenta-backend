@@ -213,11 +213,12 @@ model UserAnsweredQuestions {
 }
 
 model Admin {
-  id       String @id @default(uuid())
-  name     String
-  surname  String
-  email    String @unique
-  password String
+  id                String  @id @default(uuid())
+  name              String
+  surname           String
+  email             String  @unique
+  password          String
+  isUserDeactivated Boolean @default(false)
 
   @@map("admins")
 }

@@ -40,11 +40,25 @@ export default fp(async function (fastify: FastifyInstance) {
           where: { id: userId },
           select: { isUserDeactivated: true },
         });
+        const admin = await prisma.admin.findUnique({
+          where: { id: userId },
+          select: { isUserDeactivated: true },
+        });
 
-        if (!user || user.isUserDeactivated) {
-          return reply.status(403).send({
-            message: "User account is deactivated",
-          });
+        if (user && !admin) {
+          if (user.isUserDeactivated) {
+            return reply.status(403).send({
+              message: "User account is deactivated",
+            });
+          }
+        }
+
+        if (admin && !user) {
+          if (admin.isUserDeactivated) {
+            return reply.status(403).send({
+              message: "User account is deactivated",
+            });
+          }
         }
       } catch (err) {
         reply.send(err);
