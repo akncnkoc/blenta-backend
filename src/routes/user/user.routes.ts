@@ -8,6 +8,7 @@ import {
   confirmationEmailTr,
 } from "../../lib/emails/confirmation-email";
 import { addDays, addHours } from "date-fns";
+import { getMailClient } from "../../lib/mailer";
 const prisma = new PrismaClient();
 
 export default async function userRoutes(fastify: FastifyInstance) {
@@ -417,7 +418,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
       if (user.isUserDeactivated) {
         return reply.status(409).send({ message: "User Deactivated" });
       }
-      const oneTimePassCode = String("123456");
+      const oneTimePassCode = String(
+        Math.floor(Math.random() * 1000000),
+      ).padStart(6, "0");
       await prisma.userOneTimeCode.deleteMany({ where: { userId: user.id } });
 
       await prisma.userOneTimeCode.create({
@@ -428,7 +431,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         },
       });
 
-      // const mail = await getMailClient();
+      const mail = await getMailClient();
       const mailTemp =
         lang === "en"
           ? confirmationEmailEn(email, oneTimePassCode)
@@ -437,11 +440,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ message: "Mail temp not foundd" });
       }
 
-      console.log("Prepared email payload:", JSON.stringify(mailTemp, null, 2));
-
       try {
-        // const result = await mail.sendMail(mailTemp);
-        // console.log("Mail sent successfully:", result?.response);
+        const result = await mail.sendMail(mailTemp);
+        console.log("Mail sent successfully:", result?.response);
       } catch (err) {
         console.log(err);
       }

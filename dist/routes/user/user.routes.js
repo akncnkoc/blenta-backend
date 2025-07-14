@@ -9,6 +9,7 @@ const client_1 = require("@prisma/client");
 // import { getMailClient } from "../../lib/mailer";
 const confirmation_email_1 = require("../../lib/emails/confirmation-email");
 const date_fns_1 = require("date-fns");
+const mailer_1 = require("../../lib/mailer");
 const prisma = new client_1.PrismaClient();
 async function userRoutes(fastify) {
     fastify.withTypeProvider().route({
@@ -378,7 +379,7 @@ async function userRoutes(fastify) {
             if (user.isUserDeactivated) {
                 return reply.status(409).send({ message: "User Deactivated" });
             }
-            const oneTimePassCode = String("123456");
+            const oneTimePassCode = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
             await prisma.userOneTimeCode.deleteMany({ where: { userId: user.id } });
             await prisma.userOneTimeCode.create({
                 data: {
@@ -387,17 +388,16 @@ async function userRoutes(fastify) {
                     expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
                 },
             });
-            // const mail = await getMailClient();
+            const mail = await (0, mailer_1.getMailClient)();
             const mailTemp = lang === "en"
                 ? (0, confirmation_email_1.confirmationEmailEn)(email, oneTimePassCode)
                 : (0, confirmation_email_1.confirmationEmailTr)(email, oneTimePassCode);
             if (!mailTemp) {
                 return reply.status(400).send({ message: "Mail temp not foundd" });
             }
-            console.log("Prepared email payload:", JSON.stringify(mailTemp, null, 2));
             try {
-                // const result = await mail.sendMail(mailTemp);
-                // console.log("Mail sent successfully:", result?.response);
+                const result = await mail.sendMail(mailTemp);
+                console.log("Mail sent successfully:", result?.response);
             }
             catch (err) {
                 console.log(err);
