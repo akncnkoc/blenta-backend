@@ -170,7 +170,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
             }),
           ),
         }),
-        401: z.object({
+        500: z.object({
           message: z.string(),
         }),
       },
@@ -225,7 +225,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
             }),
           ),
         }),
-        401: z.object({
+        500: z.object({
           message: z.string(),
         }),
       },
@@ -290,7 +290,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
             memberStore: z.string().nullable(),
           }),
         }),
-        401: z.object({ message: z.string() }),
         500: z.object({ message: z.string() }),
       },
     },
@@ -347,7 +346,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
         200: z.object({
           message: z.string(),
         }),
-        401: z.object({ message: z.string() }),
         500: z.object({ message: z.string() }),
       },
     },

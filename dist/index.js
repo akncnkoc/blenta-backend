@@ -53,6 +53,7 @@ const cors_1 = __importDefault(require("@fastify/cors"));
 const admin_routes_1 = __importDefault(require("./routes/admin/admin.routes"));
 const tag_routes_1 = __importDefault(require("./routes/tag/tag.routes"));
 const promotion_code_routes_1 = __importDefault(require("./routes/promotion-code/promotion-code.routes"));
+const app_version_routes_1 = __importDefault(require("./routes/app-version/app-version.routes"));
 const fastify = (0, fastify_1.default)({ logger: true }).withTypeProvider();
 const start = async () => {
     try {
@@ -109,6 +110,7 @@ const start = async () => {
         fastify.register(category_routes_1.default, { prefix: "/category" });
         fastify.register(tag_routes_1.default, { prefix: "/tag" });
         fastify.register(promotion_code_routes_1.default, { prefix: "/promotion-code" });
+        fastify.register(app_version_routes_1.default, { prefix: "/app-version" });
         fastify.register(question_routes_1.default, { prefix: "/question" });
         fastify.register(admin_routes_1.default, { prefix: "/admin" });
         fastify.get("/healthcheck", (req, res) => {

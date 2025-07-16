@@ -1,66 +1,29 @@
 import { FastifyInstance } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import z from "zod/v4";
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient, UserReferencedCategory } from "@prisma/client";
 const prisma = new PrismaClient();
 
-export default async function tagRoutes(fastify: FastifyInstance) {
-  fastify.withTypeProvider<ZodTypeProvider>().route({
-    url: "/category/:categoryId",
-    method: "GET",
-    preHandler: [fastify.authenticate],
-    schema: {
-      tags: ["Tag"],
-      summary: "Get Category Tags",
-      params: z.object({
-        categoryId: z.string().nonempty(),
-      }),
-    },
-    handler: async (req, reply) => {
-      const { categoryId } = req.params;
-
-      try {
-        const result = await prisma.$transaction(async (tx) => {
-          var catTags = await tx.categoryTag.findMany({
-            where: { categoryId },
-            select: { tagId: true },
-          });
-          const tagIds = catTags.map((ct) => ct.tagId);
-
-          // Step 3: Use those IDs to get full tag records
-          const tags = await tx.tag.findMany({
-            where: { id: { in: tagIds } },
-          });
-          return {
-            tags,
-          };
-        });
-
-        reply.code(200).send(result);
-      } catch (error) {
-        reply.code(500).send({ message: "Internal Server Error", error });
-      }
-    },
-  });
-
+export default async function appVersionRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/",
     method: "GET",
     preHandler: [fastify.authenticate],
     schema: {
-      tags: ["Tag"],
+      tags: ["AppVersion"],
       querystring: z.object({
         page: z.string().min(1),
         size: z.string().min(1).max(100),
         search: z.string().optional().nullable(), // 🔍 add search param
       }),
-      summary: "Get All Tags With Pagination",
+      summary: "Get All App Version With Pagination",
       response: {
         200: z.object({
           data: z.array(
             z.object({
               id: z.string(),
-              name: z.string(),
+              version: z.string(),
+              created_at: z.date(),
             }),
           ),
           meta: z.object({
@@ -81,7 +44,7 @@ export default async function tagRoutes(fastify: FastifyInstance) {
           const whereClause = {
             ...(search
               ? {
-                  name: {
+                  version: {
                     contains: search,
                     mode: Prisma.QueryMode.insensitive,
                   },
@@ -89,25 +52,24 @@ export default async function tagRoutes(fastify: FastifyInstance) {
               : {}),
           };
 
-          const [total, tags] = await Promise.all([
-            tx.tag.count({
+          const [total, appVersions] = await Promise.all([
+            tx.appVersion.count({
               where: {
                 ...whereClause,
               },
             }),
-            tx.tag.findMany({
+            tx.appVersion.findMany({
               where: {
                 ...whereClause,
               },
-              include: { categoryTags: true },
               skip: (Number(page) - 1) * Number(size),
               take: Number(size),
-              orderBy: { name: "asc" },
+              orderBy: { created_at: "desc" },
             }),
           ]);
 
           return {
-            data: tags,
+            data: appVersions,
             meta: {
               total,
               page,
@@ -127,82 +89,86 @@ export default async function tagRoutes(fastify: FastifyInstance) {
     method: "POST",
     url: "/",
     schema: {
-      tags: ["Tag"],
-      summary: "Create A Tag",
+      tags: ["AppVersion"],
+      summary: "Create A App Version",
       body: z.object({
-        name: z.string(),
+        version: z.string(),
       }),
     },
     handler: async (req, reply) => {
-      const { name } = req.body;
+      const { version } = req.body;
 
       try {
         const result = await prisma.$transaction(async (tx) => {
-          var tag = await tx.tag.findFirst({
+          var appVersion = await tx.appVersion.findFirst({
             where: {
-              name: {
-                contains: name,
-                mode: Prisma.QueryMode.insensitive,
+              version: {
+                equals: version,
               },
             },
           });
-          if (tag) {
-            return { code: 409, error: { message: "Tag already exists" } };
+          if (appVersion) {
+            return {
+              code: 409,
+              error: { message: "App version already exists" },
+            };
           }
 
-          const createdTag = await tx.tag.create({
+          const createdAppVersion = await tx.appVersion.create({
             data: {
-              name,
+              version,
             },
           });
 
-          return { tag: createdTag };
+          return { appVersion: createdAppVersion };
         });
 
-        reply.code(201).send(result.tag);
+        reply.code(201).send(result.appVersion);
       } catch (error) {
         reply.code(500).send({ message: "Internal Server Error", error });
       }
     },
   });
+
   fastify.withTypeProvider<ZodTypeProvider>().route({
-    url: "/:id",
-    method: "PUT",
+    url: "/getLatestVersion",
+    method: "GET",
     preHandler: [fastify.authenticate],
     schema: {
-      tags: ["Tag"],
-      summary: "Update A Tag",
-      params: z.object({
-        id: z.string().nonempty(),
-      }),
-      body: z.object({
-        name: z.string(),
-      }),
+      tags: ["AppVersion"],
+      summary: "Get Latest  App Version",
+      response: {
+        200: z.object({
+          id: z.string(),
+          version: z.string(),
+          created_at: z.date(),
+        }),
+        500: z.object({ message: z.string() }),
+      },
     },
-    handler: async (req, reply) => {
-      const { id } = req.params;
-      const { name } = req.body;
-
+    handler: async (_, reply) => {
       try {
         const result = await prisma.$transaction(async (tx) => {
-          var tag = await tx.tag.findFirst({ where: { id: id } });
-          if (!tag) {
-            return { code: 404, error: { message: "Tag not found" } };
-          }
-
-          const updatedTag = await tx.tag.update({
-            where: { id },
-            data: {
-              name,
-            },
+          var appVersion = await tx.appVersion.findFirst({
+            orderBy: { created_at: "desc" },
           });
 
-          return { tag: updatedTag };
+          if (!appVersion) {
+            return { code: 404, error: { message: "App Version not found" } };
+          }
+
+          return {
+            appVersion: {
+              id: appVersion.id,
+              version: appVersion.version,
+              created_at: appVersion.created_at,
+            },
+          };
         });
 
-        reply.code(201).send(result.tag);
+        reply.code(200).send(result.appVersion);
       } catch (error) {
-        reply.code(500).send({ message: "Internal Server Error", error });
+        reply.code(500).send({ message: "Internal Server Error" + error });
       }
     },
   });
@@ -211,8 +177,8 @@ export default async function tagRoutes(fastify: FastifyInstance) {
     method: "DELETE",
     preHandler: [fastify.authenticate],
     schema: {
-      tags: ["Tag"],
-      summary: "Delete a TAg",
+      tags: ["AppVersion"],
+      summary: "Delete a App Version",
       params: z.object({
         id: z.string().nonempty(),
       }),
@@ -221,21 +187,18 @@ export default async function tagRoutes(fastify: FastifyInstance) {
       const { id } = req.params;
       try {
         const result = await prisma.$transaction(async (tx) => {
-          var tag = await tx.tag.findFirst({ where: { id: id } });
-          if (!tag) {
-            return { code: 404, error: { message: "Tag not found" } };
+          var appVersion = await tx.appVersion.findFirst({ where: { id: id } });
+          if (!appVersion) {
+            return { code: 404, error: { message: "App Version not found" } };
           }
-          const deletedTag = await tx.tag.delete({
+          const deletedAppVersion = await tx.appVersion.delete({
             where: { id },
           });
-          const deletedTagRelations = await tx.categoryTag.findMany({
-            where: { tagId: id },
-          });
 
-          return { tag: deletedTag };
+          return { appVersion: deletedAppVersion };
         });
 
-        reply.code(201).send(result.tag);
+        reply.code(200).send(result.appVersion);
       } catch (error) {
         reply.code(500).send({ message: "Internal Server Error", error });
       }

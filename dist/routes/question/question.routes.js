@@ -131,7 +131,7 @@ async function questionRoutes(fastify) {
             summary: "Create A Question",
             body: v4_1.default.object({
                 title: v4_1.default.string().nonempty(),
-                description: v4_1.default.string().nonempty(),
+                description: v4_1.default.string().nullable(),
                 categoryId: v4_1.default.string().nonempty(),
                 sort: v4_1.default.number(),
             }),
@@ -175,7 +175,7 @@ async function questionRoutes(fastify) {
             }),
             body: v4_1.default.object({
                 title: v4_1.default.string().nonempty(),
-                description: v4_1.default.string().nonempty(),
+                description: v4_1.default.string().nullable(),
                 categoryId: v4_1.default.string().nonempty(),
                 sort: v4_1.default.number(),
             }),

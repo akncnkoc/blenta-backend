@@ -138,7 +138,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
       summary: "Create A Question",
       body: z.object({
         title: z.string().nonempty(),
-        description: z.string().nonempty(),
+        description: z.string().nullable(),
         categoryId: z.string().nonempty(),
         sort: z.number(),
       }),
@@ -185,7 +185,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
       }),
       body: z.object({
         title: z.string().nonempty(),
-        description: z.string().nonempty(),
+        description: z.string().nullable(),
         categoryId: z.string().nonempty(),
         sort: z.number(),
       }),

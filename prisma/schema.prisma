@@ -153,7 +153,7 @@ model UserReferencedCategory {
 model Question {
   id                 String              @id @default(uuid())
   title              String
-  description        String
+  description        String?
   categoryId         String
   sort               Int                 @default(1)
   category           Category            @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -241,4 +241,12 @@ model UserPromotionCode {
   promotionCode   PromotionCode @relation(fields: [promotionCodeId], references: [id])
 
   @@map("user_promotion_codes")
+}
+
+model AppVersion {
+  id         String   @id @default(uuid())
+  version    String
+  created_at DateTime @default(now())
+
+  @@map("app_versions")
 }

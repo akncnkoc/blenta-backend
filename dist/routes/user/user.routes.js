@@ -149,7 +149,7 @@ async function userRoutes(fastify) {
                         type: v4_1.default.enum(["QUESTION", "TEST"]),
                     })),
                 }),
-                401: v4_1.default.object({
+                500: v4_1.default.object({
                     message: v4_1.default.string(),
                 }),
             },
@@ -200,7 +200,7 @@ async function userRoutes(fastify) {
                         }),
                     })),
                 }),
-                401: v4_1.default.object({
+                500: v4_1.default.object({
                     message: v4_1.default.string(),
                 }),
             },
@@ -263,7 +263,6 @@ async function userRoutes(fastify) {
                         memberStore: v4_1.default.string().nullable(),
                     }),
                 }),
-                401: v4_1.default.object({ message: v4_1.default.string() }),
                 500: v4_1.default.object({ message: v4_1.default.string() }),
             },
         },
@@ -312,7 +311,6 @@ async function userRoutes(fastify) {
                 200: v4_1.default.object({
                     message: v4_1.default.string(),
                 }),
-                401: v4_1.default.object({ message: v4_1.default.string() }),
                 500: v4_1.default.object({ message: v4_1.default.string() }),
             },
         },
