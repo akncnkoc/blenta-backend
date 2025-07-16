@@ -23,17 +23,29 @@ async function tagRoutes(fastify) {
             const { categoryId } = req.params;
             try {
                 const result = await prisma.$transaction(async (tx) => {
-                    var catTags = await tx.categoryTag.findMany({
+                    // 1. categoryTag kayıtlarını al - hem tagId hem categoryTagId dönecek
+                    const catTags = await tx.categoryTag.findMany({
                         where: { categoryId },
-                        select: { tagId: true },
+                        select: {
+                            id: true, // categoryTagId
+                            tagId: true,
+                        },
                     });
                     const tagIds = catTags.map((ct) => ct.tagId);
-                    // Step 3: Use those IDs to get full tag records
+                    // 2. tag kayıtlarını al
                     const tags = await tx.tag.findMany({
                         where: { id: { in: tagIds } },
                     });
+                    // 3. categoryTagId ile tag'leri eşleştirerek döndür
+                    const enrichedTags = catTags.map((ct) => {
+                        const tag = tags.find((t) => t.id === ct.tagId);
+                        return {
+                            categoryTagId: ct.id,
+                            ...tag,
+                        };
+                    });
                     return {
-                        tags,
+                        tags: enrichedTags,
                     };
                 });
                 reply.code(200).send(result);
@@ -223,7 +235,40 @@ async function tagRoutes(fastify) {
                     });
                     return { tag: deletedTag };
                 });
-                reply.code(201).send(result.tag);
+                reply.code(200).send(result.tag);
+            }
+            catch (error) {
+                reply.code(500).send({ message: "Internal Server Error", error });
+            }
+        },
+    });
+    fastify.withTypeProvider().route({
+        url: "/categoryTag/:id",
+        method: "DELETE",
+        preHandler: [fastify.authenticateAdmin],
+        schema: {
+            tags: ["Tag"],
+            summary: "Delete a Category Tag",
+            params: v4_1.default.object({
+                id: v4_1.default.string().nonempty(),
+            }),
+        },
+        handler: async (req, reply) => {
+            const { id } = req.params;
+            try {
+                const result = await prisma.$transaction(async (tx) => {
+                    var categoryTag = await tx.categoryTag.findFirst({
+                        where: { id: id },
+                    });
+                    if (!categoryTag) {
+                        return { code: 404, error: { message: "Category Tag not found" } };
+                    }
+                    const deletedCategoryTag = await tx.categoryTag.delete({
+                        where: { id },
+                    });
+                    return { deletedCategoryTag };
+                });
+                reply.code(200).send(result.deletedCategoryTag);
             }
             catch (error) {
                 reply.code(500).send({ message: "Internal Server Error", error });
