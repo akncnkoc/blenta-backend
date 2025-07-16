@@ -66,7 +66,7 @@ const start = async () => {
       },
     });
 
-    fastify.register(jwtPlugin);
+    await fastify.register(jwtPlugin);
     (fastify as any).addHook("preHandler", (req, _, next) => {
       (req as any).jwt = fastify.jwt;
       next();
@@ -77,34 +77,25 @@ const start = async () => {
       hook: "preHandler",
     });
     fastify.register(errorHandler);
-    fastify.register(userRoutes, { prefix: "/user" });
-    fastify.register(categoryRoutes, { prefix: "/category" });
-    fastify.register(tagRoutes, { prefix: "/tag" });
-    fastify.register(promotionCodeRoutes, { prefix: "/promotion-code" });
-    fastify.register(appVersionRoutes, { prefix: "/app-version" });
-    fastify.register(questionRoutes, { prefix: "/question" });
-    fastify.register(adminRoutes, { prefix: "/admin" });
-    fastify.get("/healthcheck", (req, res) => {
-      res.send({ message: "Success" });
-    });
-    var appId = "b8432b15-baab-4b65-8943-139bcd7a31e4";
-    const configuration = OneSignal.createConfiguration({
-      organizationApiKey: "",
-      restApiKey:
-        "os_v2_app_xbbswfn2vnfwlckdcon426rr4rbxgeikxqme5buyydorgcpwil7gbqp52bsb3m22muoztiyvjijlt35hf6sm6iwphx5ymgxtcnwebpy",
-    });
-    const client = new OneSignal.DefaultApi(configuration);
-    // client.createNotification({
-    //   app_id: appId,
-    //   name: "Test Notification",
-    //   contents: {
-    //     en: "Test Notification Content",
-    //     tr: "Test Bildirim Icerigi",
-    //   },
-    //   headings: {
-    //     en: "Test Notification",
-    //     tr: "Test Bildirim",
-    //   },
+    await fastify.register(userRoutes, { prefix: "/user" });
+    await fastify.register(categoryRoutes, { prefix: "/category" });
+    await fastify.register(tagRoutes, { prefix: "/tag" });
+    await fastify.register(promotionCodeRoutes, { prefix: "/promotion-code" });
+    await fastify.register(appVersionRoutes, { prefix: "/app-version" });
+    await fastify.register(questionRoutes, { prefix: "/question" });
+    await fastify.register(adminRoutes, { prefix: "/admin" });
+    fastify.get(
+      "/healthcheck",
+      { preHandler: [fastify.authenticateAdmin] },
+      (req, res) => {
+        res.send({ message: "Success" });
+      },
+    );
+    // var appId = "b8432b15-baab-4b65-8943-139bcd7a31e4";
+    // const configuration = OneSignal.createConfiguration({
+    //   organizationApiKey: "",
+    //   restApiKey:
+    //     "os_v2_app_xbbswfn2vnfwlckdcon426rr4rbxgeikxqme5buyydorgcpwil7gbqp52bsb3m22muoztiyvjijlt35hf6sm6iwphx5ymgxtcnwebpy",
     // });
 
     await fastify.listen({ port: Number(config.port), host: "0.0.0.0" });

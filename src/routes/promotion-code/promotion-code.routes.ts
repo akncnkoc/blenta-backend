@@ -8,7 +8,7 @@ export default async function promotionCodeRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/",
     method: "GET",
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["PromotionCode"],
       querystring: z.object({
@@ -108,6 +108,7 @@ export default async function promotionCodeRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     method: "POST",
     url: "/",
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["PromotionCode"],
       summary: "Create A Promotion Code",
@@ -155,7 +156,7 @@ export default async function promotionCodeRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/:id",
     method: "PUT",
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["PromotionCode"],
       summary: "Update A Promotion Code",
@@ -203,7 +204,7 @@ export default async function promotionCodeRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/:id",
     method: "DELETE",
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["PromotionCode"],
       summary: "Delete a Promotion Code",

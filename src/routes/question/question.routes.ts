@@ -133,6 +133,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     method: "POST",
     url: "/",
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["Question"],
       summary: "Create A Question",
@@ -176,7 +177,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/:id",
     method: "PUT",
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["Question"],
       summary: "Update A Question",
@@ -349,8 +350,7 @@ export default async function questionRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/:id",
     method: "DELETE",
-
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["Question"],
       summary: "Delete a question",

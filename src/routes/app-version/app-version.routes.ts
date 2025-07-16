@@ -8,7 +8,7 @@ export default async function appVersionRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/",
     method: "GET",
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["AppVersion"],
       querystring: z.object({
@@ -88,6 +88,7 @@ export default async function appVersionRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     method: "POST",
     url: "/",
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["AppVersion"],
       summary: "Create A App Version",
@@ -102,9 +103,7 @@ export default async function appVersionRoutes(fastify: FastifyInstance) {
         const result = await prisma.$transaction(async (tx) => {
           var appVersion = await tx.appVersion.findFirst({
             where: {
-              version: {
-                equals: version,
-              },
+              version,
             },
           });
           if (appVersion) {
@@ -133,7 +132,6 @@ export default async function appVersionRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/getLatestVersion",
     method: "GET",
-    preHandler: [fastify.authenticate],
     schema: {
       tags: ["AppVersion"],
       summary: "Get Latest  App Version",
@@ -175,7 +173,7 @@ export default async function appVersionRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/:id",
     method: "DELETE",
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["AppVersion"],
       summary: "Delete a App Version",

@@ -126,6 +126,7 @@ export default async function tagRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     method: "POST",
     url: "/",
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["Tag"],
       summary: "Create A Tag",
@@ -168,7 +169,7 @@ export default async function tagRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/:id",
     method: "PUT",
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["Tag"],
       summary: "Update A Tag",
@@ -209,7 +210,7 @@ export default async function tagRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
     url: "/:id",
     method: "DELETE",
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticateAdmin],
     schema: {
       tags: ["Tag"],
       summary: "Delete a TAg",
