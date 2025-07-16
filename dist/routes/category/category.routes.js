@@ -308,7 +308,7 @@ async function categoryRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/",
         method: "POST",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Category"],
             summary: "Create A Category",
@@ -353,7 +353,7 @@ async function categoryRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/:id",
         method: "PUT",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Category"],
             summary: "Update A Category",
@@ -411,7 +411,7 @@ async function categoryRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/:id/addTag",
         method: "PUT",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Category"],
             summary: "Add Category a tag",
@@ -444,13 +444,19 @@ async function categoryRoutes(fastify) {
                             error: { message: "Tag already added category" },
                         };
                     }
-                    return { category: category };
+                    const createdCategoryTag = await tx.categoryTag.create({
+                        data: {
+                            categoryId: id,
+                            tagId: tagId,
+                        },
+                    });
+                    return { categoryTag: createdCategoryTag };
                 });
                 if (result.error) {
                     reply.code(result.code).send(result.error);
                     return;
                 }
-                reply.code(200).send(result.category);
+                reply.code(200).send(result.categoryTag);
             }
             catch (error) {
                 reply.code(500).send({ message: "Internal Server Error", error });
@@ -569,7 +575,7 @@ async function categoryRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/:id",
         method: "DELETE",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Category"],
             summary: "Delete A Category",

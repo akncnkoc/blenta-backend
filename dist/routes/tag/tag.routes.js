@@ -121,6 +121,7 @@ async function tagRoutes(fastify) {
     fastify.withTypeProvider().route({
         method: "POST",
         url: "/",
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Tag"],
             summary: "Create A Tag",
@@ -160,7 +161,7 @@ async function tagRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/:id",
         method: "PUT",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Tag"],
             summary: "Update A Tag",
@@ -198,7 +199,7 @@ async function tagRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/:id",
         method: "DELETE",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Tag"],
             summary: "Delete a TAg",

@@ -11,7 +11,7 @@ async function promotionCodeRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/",
         method: "GET",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["PromotionCode"],
             querystring: v4_1.default.object({
@@ -102,6 +102,7 @@ async function promotionCodeRoutes(fastify) {
     fastify.withTypeProvider().route({
         method: "POST",
         url: "/",
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["PromotionCode"],
             summary: "Create A Promotion Code",
@@ -146,7 +147,7 @@ async function promotionCodeRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/:id",
         method: "PUT",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["PromotionCode"],
             summary: "Update A Promotion Code",
@@ -191,7 +192,7 @@ async function promotionCodeRoutes(fastify) {
     fastify.withTypeProvider().route({
         url: "/:id",
         method: "DELETE",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["PromotionCode"],
             summary: "Delete a Promotion Code",
