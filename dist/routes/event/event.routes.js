@@ -10,7 +10,7 @@ const isPaidMembership_1 = require("../../lib/isPaidMembership");
 const prisma = new client_1.PrismaClient();
 async function eventRoutes(fastify) {
     fastify.withTypeProvider().route({
-        url: "/event/finder",
+        url: "/finder",
         method: "POST",
         preHandler: [fastify.authenticate], // kullanıcının kimliğini doğrulamalı
         schema: {

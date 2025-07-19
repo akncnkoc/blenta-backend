@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 
 export default async function eventRoutes(fastify: FastifyInstance) {
   fastify.withTypeProvider<ZodTypeProvider>().route({
-    url: "/event/finder",
+    url: "/finder",
     method: "POST",
     preHandler: [fastify.authenticate], // kullanıcının kimliğini doğrulamalı
     schema: {
