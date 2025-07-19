@@ -49,6 +49,8 @@ model User {
   membershipExpiresAt   DateTime?
   memberVendorProductId String?
   memberStore           String?
+  eventSearchCount      Int       @default(0)
+  eventSearchLastDate   DateTime?
 
   role                     Role                     @default(USER)
   onesignalKey             String?
@@ -249,4 +251,33 @@ model AppVersion {
   created_at DateTime @default(now())
 
   @@map("app_versions")
+}
+
+model Event {
+  id                  String            @id @default(uuid())
+  name                String
+  event_to_event_tags EventToEventTag[]
+  culture             String?
+
+  @@map("events")
+}
+
+model EventTag {
+  id                  String            @id @default(uuid())
+  name                String
+  event_to_event_tags EventToEventTag[]
+  culture             String?
+  question            String            @default("")
+
+  @@map("event_tags")
+}
+
+model EventToEventTag {
+  id           String   @id @default(uuid())
+  event_tag_id String
+  event_tag    EventTag @relation(fields: [event_tag_id], references: [id])
+  event_id     String
+  event        Event    @relation(fields: [event_id], references: [id])
+
+  @@map("event_to_event_tags")
 }

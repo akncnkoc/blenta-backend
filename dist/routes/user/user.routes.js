@@ -10,6 +10,7 @@ const client_1 = require("@prisma/client");
 const confirmation_email_1 = require("../../lib/emails/confirmation-email");
 const date_fns_1 = require("date-fns");
 const mailer_1 = require("../../lib/mailer");
+const isPaidMembership_1 = require("../../lib/isPaidMembership");
 const prisma = new client_1.PrismaClient();
 async function userRoutes(fastify) {
     fastify.withTypeProvider().route({
@@ -327,6 +328,10 @@ async function userRoutes(fastify) {
                         memberVendorProductId: "",
                         memberStore: "",
                     },
+                });
+                await prisma.userPromotionCode.updateMany({
+                    where: { userId: userId },
+                    data: { expiresAt: new Date() },
                 });
                 reply.code(200).send({
                     message: "Membership updated successfully",
@@ -711,7 +716,8 @@ async function userRoutes(fastify) {
                     if (!user) {
                         throw new Error("UserNotFound");
                     }
-                    if (user.isPaidMembership) {
+                    var isUserPremium = await (0, isPaidMembership_1.isPaidMembership)(user.id);
+                    if (isUserPremium) {
                         throw new Error("UserAlreadyMember");
                     }
                     var promotionCode = await tx.promotionCode.findFirst({

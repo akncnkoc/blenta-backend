@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import z from "zod/v4";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { Prisma, PrismaClient } from "@prisma/client";
+import { isPaidMembership } from "../../lib/isPaidMembership";
 const prisma = new PrismaClient();
 const CategorySchema: z.ZodType<any> = z.lazy(() =>
   z.object({
@@ -245,8 +246,9 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
             return { code: 404, error: { message: "Category not found" } };
           }
 
-          if (!admin) {
-            if (root.isPremiumCat && !user?.isPaidMembership) {
+          if (!admin && user) {
+            var userIsPremium = await isPaidMembership(user.id);
+            if (root.isPremiumCat && userIsPremium) {
               return {
                 code: 409,
                 error: { message: "This user has no right to see category" },

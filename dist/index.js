@@ -20,6 +20,8 @@ const admin_routes_1 = __importDefault(require("./routes/admin/admin.routes"));
 const tag_routes_1 = __importDefault(require("./routes/tag/tag.routes"));
 const promotion_code_routes_1 = __importDefault(require("./routes/promotion-code/promotion-code.routes"));
 const app_version_routes_1 = __importDefault(require("./routes/app-version/app-version.routes"));
+const event_routes_1 = __importDefault(require("./routes/event/event.routes"));
+const event_tag_routes_1 = __importDefault(require("./routes/event/event-tag.routes"));
 const fastify = (0, fastify_1.default)({ logger: true }).withTypeProvider();
 const start = async () => {
     try {
@@ -78,6 +80,8 @@ const start = async () => {
         await fastify.register(promotion_code_routes_1.default, { prefix: "/promotion-code" });
         await fastify.register(app_version_routes_1.default, { prefix: "/app-version" });
         await fastify.register(question_routes_1.default, { prefix: "/question" });
+        await fastify.register(event_routes_1.default, { prefix: "/event" });
+        await fastify.register(event_tag_routes_1.default, { prefix: "/event-tag" });
         await fastify.register(admin_routes_1.default, { prefix: "/admin" });
         fastify.get("/healthcheck", { preHandler: [fastify.authenticateAdmin] }, (req, res) => {
             res.send({ message: "Success" });

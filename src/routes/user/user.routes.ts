@@ -9,6 +9,7 @@ import {
 } from "../../lib/emails/confirmation-email";
 import { addDays, addHours } from "date-fns";
 import { getMailClient } from "../../lib/mailer";
+import { isPaidMembership } from "../../lib/isPaidMembership";
 const prisma = new PrismaClient();
 
 export default async function userRoutes(fastify: FastifyInstance) {
@@ -363,6 +364,11 @@ export default async function userRoutes(fastify: FastifyInstance) {
             memberVendorProductId: "",
             memberStore: "",
           },
+        });
+
+        await prisma.userPromotionCode.updateMany({
+          where: { userId: userId },
+          data: { expiresAt: new Date() },
         });
 
         reply.code(200).send({
@@ -794,7 +800,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
             throw new Error("UserNotFound");
           }
 
-          if (user.isPaidMembership) {
+          var isUserPremium = await isPaidMembership(user.id);
+          if (isUserPremium) {
             throw new Error("UserAlreadyMember");
           }
 

@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = categoryRoutes;
 const v4_1 = __importDefault(require("zod/v4"));
 const client_1 = require("@prisma/client");
+const isPaidMembership_1 = require("../../lib/isPaidMembership");
 const prisma = new client_1.PrismaClient();
 const CategorySchema = v4_1.default.lazy(() => v4_1.default.object({
     id: v4_1.default.string(),
@@ -224,8 +225,9 @@ async function categoryRoutes(fastify) {
                     if (!root) {
                         return { code: 404, error: { message: "Category not found" } };
                     }
-                    if (!admin) {
-                        if (root.isPremiumCat && !user?.isPaidMembership) {
+                    if (!admin && user) {
+                        var userIsPremium = await (0, isPaidMembership_1.isPaidMembership)(user.id);
+                        if (root.isPremiumCat && userIsPremium) {
                             return {
                                 code: 409,
                                 error: { message: "This user has no right to see category" },
