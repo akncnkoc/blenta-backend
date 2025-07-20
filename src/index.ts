@@ -22,7 +22,8 @@ import tagRoutes from "./routes/tag/tag.routes";
 import promotionCodeRoutes from "./routes/promotion-code/promotion-code.routes";
 import appVersionRoutes from "./routes/app-version/app-version.routes";
 import eventRoutes from "./routes/event/event.routes";
-import eventTagRoutes from "./routes/event/event-tag.routes";
+import eventQuestionRoutes from "./routes/event/event-question.routes";
+import eventQuestionAnswerRoutes from "./routes/event/event-question-answers.routes";
 
 const fastify = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>();
 const start = async () => {
@@ -86,7 +87,10 @@ const start = async () => {
     await fastify.register(appVersionRoutes, { prefix: "/app-version" });
     await fastify.register(questionRoutes, { prefix: "/question" });
     await fastify.register(eventRoutes, { prefix: "/event" });
-    await fastify.register(eventTagRoutes, { prefix: "/event-tag" });
+    await fastify.register(eventQuestionRoutes, { prefix: "/event-question" });
+    await fastify.register(eventQuestionAnswerRoutes, {
+      prefix: "/event-question-answer",
+    });
     await fastify.register(adminRoutes, { prefix: "/admin" });
     fastify.get(
       "/healthcheck",

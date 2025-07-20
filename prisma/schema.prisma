@@ -253,31 +253,44 @@ model AppVersion {
   @@map("app_versions")
 }
 
+model EventQuestion {
+  id        String   @id @default(uuid())
+  text      String
+  culture   String
+  createdAt DateTime @default(now())
+
+  answers EventQuestionAnswer[]
+
+  @@map("event_questions")
+}
+
+model EventQuestionAnswer {
+  id         String        @id @default(uuid())
+  text       String
+  questionId String
+  question   EventQuestion @relation(fields: [questionId], references: [id])
+  matches    EventMatch[]
+
+  @@map("event_question_answers")
+}
+
 model Event {
-  id                  String            @id @default(uuid())
-  name                String
-  event_to_event_tags EventToEventTag[]
-  culture             String?
+  id          String       @id @default(uuid())
+  name        String?
+  description String?
+  culture     String?
+  matches     EventMatch[]
 
   @@map("events")
 }
 
-model EventTag {
-  id                  String            @id @default(uuid())
-  name                String
-  event_to_event_tags EventToEventTag[]
-  culture             String?
-  question            String            @default("")
+model EventMatch {
+  id      String @id @default(uuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id])
 
-  @@map("event_tags")
-}
+  answerId String
+  answer   EventQuestionAnswer @relation(fields: [answerId], references: [id])
 
-model EventToEventTag {
-  id           String   @id @default(uuid())
-  event_tag_id String
-  event_tag    EventTag @relation(fields: [event_tag_id], references: [id])
-  event_id     String
-  event        Event    @relation(fields: [event_id], references: [id])
-
-  @@map("event_to_event_tags")
+  @@map("event_matches")
 }

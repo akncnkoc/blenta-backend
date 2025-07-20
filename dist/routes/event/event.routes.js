@@ -10,296 +10,246 @@ const isPaidMembership_1 = require("../../lib/isPaidMembership");
 const prisma = new client_1.PrismaClient();
 async function eventRoutes(fastify) {
     fastify.withTypeProvider().route({
-        url: "/finder",
         method: "POST",
-        preHandler: [fastify.authenticate], // kullanıcının kimliğini doğrulamalı
+        url: "/finder",
+        preHandler: [fastify.authenticate],
         schema: {
             tags: ["Event"],
-            summary: "Find Events by Tags with Daily Limit",
+            summary: "Find Events by matching answerTexts (daily limit for non-premium users)",
             body: v4_1.default.object({
-                culture: v4_1.default.string(),
-                tagIds: v4_1.default.array(v4_1.default.uuid()).min(1), // kullanıcı bir veya daha fazla tag gönderir
+                answerTexts: v4_1.default.array(v4_1.default.string().min(1)).nonempty(),
             }),
             response: {
-                200: v4_1.default.object({
-                    data: v4_1.default.array(v4_1.default.object({
-                        id: v4_1.default.string(),
-                        name: v4_1.default.string(),
-                        culture: v4_1.default.string().nullable(),
-                    })),
-                }),
-                403: v4_1.default.object({ message: v4_1.default.string() }),
+                200: v4_1.default.array(v4_1.default.object({
+                    id: v4_1.default.string(),
+                    name: v4_1.default.string().nullable(),
+                    description: v4_1.default.string().nullable(),
+                    culture: v4_1.default.string().nullable(),
+                })),
+                400: v4_1.default.object({ message: v4_1.default.string() }),
+                429: v4_1.default.object({ message: v4_1.default.string() }),
                 500: v4_1.default.object({ message: v4_1.default.string() }),
             },
         },
         handler: async (req, reply) => {
-            const { tagIds } = req.body;
+            const { answerTexts } = req.body;
             const userId = req.user.id;
             try {
-                const user = await prisma.user.findUnique({ where: { id: userId } });
-                if (!user)
-                    return reply.code(403).send({ message: "User not found" });
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const isNewDay = !user.eventSearchLastDate || user.eventSearchLastDate < today;
-                const premium = await (0, isPaidMembership_1.isPaidMembership)(user.id);
-                if (!premium) {
-                    if (isNewDay) {
-                        await prisma.user.update({
-                            where: { id: userId },
-                            data: {
-                                eventSearchCount: 1,
-                                eventSearchLastDate: new Date(),
-                            },
-                        });
-                    }
-                    else if (user.eventSearchCount >= 3) {
-                        return reply.code(403).send({
-                            message: "Günlük limitinize ulaştınız. Sınırsız kullanım için premium olun.",
-                        });
-                    }
-                    else {
-                        await prisma.user.update({
-                            where: { id: userId },
-                            data: {
-                                eventSearchCount: { increment: 1 },
-                            },
-                        });
-                    }
+                const user = await prisma.user.findUnique({
+                    where: { id: userId },
+                    select: {
+                        id: true,
+                        isPaidMembership: true,
+                        eventSearchCount: true,
+                        eventSearchLastDate: true,
+                    },
+                });
+                if (!user) {
+                    return reply.code(400).send({ message: "User not found" });
                 }
-                // Rastgele bir event döndür
-                const randomEvent = (await prisma.$queryRaw `
-      SELECT e.id, e.name, e.culture
-      FROM "events" e
-      JOIN "event_to_event_tags" ett ON e.id = ett.event_id
-      WHERE ett.event_tag_id = ANY(${tagIds})
-      ORDER BY RANDOM()
-      LIMIT 1
-    `);
-                if (!randomEvent.length) {
-                    return reply.code(200).send({ data: [] });
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                let shouldReset = false;
+                if (!user.eventSearchLastDate) {
+                    shouldReset = true;
                 }
-                return reply.code(200).send({ data: [randomEvent[0]] });
+                else {
+                    const lastSearchDate = new Date(user.eventSearchLastDate);
+                    const lastDate = new Date(lastSearchDate.getFullYear(), lastSearchDate.getMonth(), lastSearchDate.getDate());
+                    shouldReset = lastDate.getTime() !== today.getTime();
+                }
+                const isPremium = await (0, isPaidMembership_1.isPaidMembership)(user.id);
+                if (!isPremium) {
+                    if (!shouldReset && user.eventSearchCount >= 3) {
+                        return reply
+                            .code(429)
+                            .send({ message: "Daily search limit reached" });
+                    }
+                    // Günlük limit sıfırlanacaksa sıfırla
+                    const newSearchCount = shouldReset ? 1 : user.eventSearchCount + 1;
+                    await prisma.user.update({
+                        where: { id: userId },
+                        data: {
+                            eventSearchCount: newSearchCount,
+                            eventSearchLastDate: now,
+                        },
+                    });
+                }
+                const events = (await prisma.$queryRaw `
+        SELECT e.id, e.name, e.description, e.culture
+        FROM events e
+        JOIN event_matches em ON em."eventId" = e.id
+        JOIN event_question_answers a ON a.id = em."answerId"
+        WHERE a.text = ANY(${answerTexts})
+        GROUP BY e.id
+        HAVING COUNT(DISTINCT a.text) = ${answerTexts.length}
+      `);
+                return reply.code(200).send(events);
             }
-            catch (err) {
-                return reply
-                    .code(500)
-                    .send({ message: "Internal Server Error: " + err });
+            catch (error) {
+                console.error(error);
+                return reply.code(500).send({ message: "Internal Server Error" });
             }
         },
     });
     fastify.withTypeProvider().route({
+        method: "POST",
         url: "/",
-        method: "GET",
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Event"],
-            querystring: v4_1.default.object({
-                lang: v4_1.default.string().min(1),
-                page: v4_1.default.string().min(1),
-                size: v4_1.default.string().min(1).max(100),
-                search: v4_1.default.string().optional().nullable(), // 🔍 add search param
+            summary: "Create a new Event and link answer matches",
+            body: v4_1.default.object({
+                name: v4_1.default.string(),
+                description: v4_1.default.string().optional(),
+                culture: v4_1.default.string().optional(),
+                answerIds: v4_1.default.array(v4_1.default.uuid()).nonempty(),
             }),
-            summary: "Get All Events",
+            response: {
+                201: v4_1.default.object({
+                    id: v4_1.default.string(),
+                    name: v4_1.default.string().nullable(),
+                    description: v4_1.default.string().nullable(),
+                    culture: v4_1.default.string().nullable(),
+                    matches: v4_1.default.array(v4_1.default.object({
+                        id: v4_1.default.string(),
+                        answerId: v4_1.default.string(),
+                    })),
+                }),
+                400: v4_1.default.object({ message: v4_1.default.string() }),
+                500: v4_1.default.object({ message: v4_1.default.string() }),
+            },
+        },
+        handler: async (request, reply) => {
+            const { name, description, culture, answerIds } = request.body;
+            try {
+                const event = await prisma.event.create({
+                    data: {
+                        name,
+                        description,
+                        culture,
+                        matches: {
+                            create: answerIds.map((answerId) => ({
+                                answerId,
+                            })),
+                        },
+                    },
+                    include: {
+                        matches: true,
+                    },
+                });
+                return reply.status(201).send(event);
+            }
+            catch (error) {
+                console.error(error);
+                return reply.status(500).send({ message: "Internal Server Error" });
+            }
+        },
+    });
+    fastify.withTypeProvider().route({
+        method: "GET",
+        url: "/",
+        preHandler: [fastify.authenticateAdmin],
+        schema: {
+            tags: ["Event"],
+            summary: "Get all events with matches (paginated & filtered)",
+            querystring: v4_1.default.object({
+                page: v4_1.default.string().optional(),
+                size: v4_1.default.string().optional(),
+                lang: v4_1.default.string().optional(),
+                culture: v4_1.default.string().optional(),
+                search: v4_1.default.string().optional(),
+            }),
             response: {
                 200: v4_1.default.object({
                     data: v4_1.default.array(v4_1.default.object({
                         id: v4_1.default.string(),
-                        name: v4_1.default.string(),
+                        name: v4_1.default.string().nullable(),
+                        description: v4_1.default.string().nullable(),
                         culture: v4_1.default.string().nullable(),
+                        matches: v4_1.default.array(v4_1.default.object({
+                            id: v4_1.default.string(),
+                            answerId: v4_1.default.string(),
+                        })),
                     })),
                     meta: v4_1.default.object({
                         total: v4_1.default.number(),
-                        page: v4_1.default.string(),
-                        size: v4_1.default.string(),
-                        pageCount: v4_1.default.number(),
+                        page: v4_1.default.number(),
+                        size: v4_1.default.number(),
                     }),
                 }),
                 500: v4_1.default.object({ message: v4_1.default.string() }),
             },
         },
-        handler: async (req, reply) => {
-            const { page, size, search, lang } = req.query;
+        handler: async (request, reply) => {
             try {
-                const result = await prisma.$transaction(async (tx) => {
-                    const whereClause = {
-                        culture: lang,
-                        ...(search
+                const { page = "1", size = "10", lang, culture, search, } = request.query;
+                const pageNum = Math.max(1, parseInt(page));
+                const sizeNum = Math.max(1, parseInt(size));
+                const where = {
+                    AND: [
+                        lang ? { culture: { equals: lang } } : {},
+                        culture ? { culture: { equals: culture } } : {},
+                        search
                             ? {
-                                name: {
-                                    contains: search,
-                                    mode: client_1.Prisma.QueryMode.insensitive,
-                                },
+                                OR: [
+                                    { name: { contains: search, mode: "insensitive" } },
+                                    { description: { contains: search, mode: "insensitive" } },
+                                ],
                             }
-                            : {}),
-                    };
-                    const [total, events] = await Promise.all([
-                        tx.event.count({
-                            where: {
-                                ...whereClause,
-                            },
-                        }),
-                        tx.event.findMany({
-                            where: {
-                                ...whereClause,
-                            },
-                            skip: (Number(page) - 1) * Number(size),
-                            take: Number(size),
-                            orderBy: { name: "asc" },
-                        }),
-                    ]);
-                    return {
-                        data: events,
-                        meta: {
-                            total,
-                            page,
-                            size,
-                            pageCount: Math.ceil(total / Number(size)),
-                        },
-                    };
-                });
-                reply.code(200).send(result);
-            }
-            catch (error) {
-                reply.code(500).send({ message: "Internal Server Error: " + error });
-            }
-        },
-    });
-    fastify.withTypeProvider().route({
-        url: "/:id",
-        method: "GET",
-        preHandler: [fastify.authenticate],
-        schema: {
-            tags: ["Event"],
-            params: v4_1.default.object({
-                id: v4_1.default.string(),
-            }),
-            summary: "Get Event",
-            response: {
-                200: v4_1.default.object({
-                    id: v4_1.default.string(),
-                    name: v4_1.default.string(),
-                    culture: v4_1.default.string().nullable(),
-                    tagIds: v4_1.default.array(v4_1.default.uuid()),
-                }),
-                500: v4_1.default.object({ message: v4_1.default.string() }),
-            },
-        },
-        handler: async (req, reply) => {
-            const { id } = req.params;
-            try {
-                const result = await prisma.$transaction(async (tx) => {
-                    const event = await tx.event.findFirst({
-                        where: { id },
+                            : {},
+                    ],
+                };
+                const [events, total] = await Promise.all([
+                    prisma.event.findMany({
+                        where,
                         include: {
-                            event_to_event_tags: {
-                                select: {
-                                    event_tag_id: true, // sadece tag id'lerini alıyoruz
-                                },
-                            },
+                            matches: true,
                         },
-                    });
-                    if (!event) {
-                        return { code: 404, error: { message: "Event not found" } };
-                    }
-                    // Tag Id'leri array olarak alalım
-                    const tagIds = event.event_to_event_tags.map((t) => t.event_tag_id);
-                    // Dönüş objesi
-                    return {
-                        data: {
-                            id: event.id,
-                            name: event.name,
-                            culture: event.culture,
-                            tagIds,
+                        orderBy: {
+                            name: "asc",
                         },
-                    };
+                        skip: (pageNum - 1) * sizeNum,
+                        take: sizeNum,
+                    }),
+                    prisma.event.count({ where }),
+                ]);
+                reply.code(200).send({
+                    data: events,
+                    meta: {
+                        total,
+                        page: pageNum,
+                        size: sizeNum,
+                    },
                 });
-                reply.code(200).send(result.data);
             }
             catch (error) {
-                reply.code(500).send({ message: "Internal Server Error: " + error });
-            }
-        },
-    });
-    fastify.withTypeProvider().route({
-        method: "POST",
-        url: "/",
-        preHandler: [fastify.authenticateAdmin],
-        schema: {
-            tags: ["Event"],
-            summary: "Create A Event",
-            body: v4_1.default.object({
-                name: v4_1.default.string(),
-                culture: v4_1.default.string(),
-                tagIds: v4_1.default.array(v4_1.default.uuid()).optional().default([]),
-            }),
-            response: {
-                201: v4_1.default.object({
-                    id: v4_1.default.string(),
-                    name: v4_1.default.string(),
-                }),
-                409: v4_1.default.object({ message: v4_1.default.string() }),
-                500: v4_1.default.object({ message: v4_1.default.string() }),
-            },
-        },
-        handler: async (req, reply) => {
-            const { name, culture, tagIds } = req.body;
-            try {
-                const result = await prisma.$transaction(async (tx) => {
-                    const existingEvent = await tx.event.findFirst({
-                        where: {
-                            name: {
-                                contains: name,
-                                mode: client_1.Prisma.QueryMode.insensitive,
-                            },
-                        },
-                    });
-                    if (existingEvent) {
-                        return { code: 409, error: { message: "Event already exists" } };
-                    }
-                    const createdEvent = await tx.event.create({
-                        data: { name, culture },
-                    });
-                    if (tagIds.length > 0) {
-                        await tx.eventToEventTag.createMany({
-                            data: tagIds.map((tagId) => ({
-                                event_id: createdEvent.id,
-                                event_tag_id: tagId,
-                            })),
-                            skipDuplicates: true, // aynı tag iki kez gelirse sorun çıkarmaz
-                        });
-                    }
-                    return { createdEvent };
-                });
-                if ("error" in result) {
-                    return reply.code(result.code ?? 500).send(result.error);
-                }
-                reply.code(201).send(result.createdEvent);
-            }
-            catch (error) {
+                console.error(error);
                 reply.code(500).send({ message: "Internal Server Error" });
             }
         },
     });
+    // GET event by id
     fastify.withTypeProvider().route({
+        method: "GET",
         url: "/:id",
-        method: "PUT",
         preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Event"],
-            summary: "Update A Event",
+            summary: "Get an event by id with matches",
             params: v4_1.default.object({
-                id: v4_1.default.string().nonempty(),
-            }),
-            body: v4_1.default.object({
-                name: v4_1.default.string(),
-                tagIds: v4_1.default.array(v4_1.default.uuid()).optional().default([]),
-                culture: v4_1.default.string(),
+                id: v4_1.default.uuid(),
             }),
             response: {
-                201: v4_1.default.object({
+                200: v4_1.default.object({
                     id: v4_1.default.string(),
-                    name: v4_1.default.string(),
+                    name: v4_1.default.string().nullable(),
+                    description: v4_1.default.string().nullable(),
+                    culture: v4_1.default.string().nullable(),
+                    matches: v4_1.default.array(v4_1.default.object({
+                        id: v4_1.default.string(),
+                        answerId: v4_1.default.string(),
+                    })),
                 }),
                 404: v4_1.default.object({ message: v4_1.default.string() }),
                 500: v4_1.default.object({ message: v4_1.default.string() }),
@@ -307,173 +257,123 @@ async function eventRoutes(fastify) {
         },
         handler: async (req, reply) => {
             const { id } = req.params;
-            const { name, culture, tagIds } = req.body;
             try {
-                const result = await prisma.$transaction(async (tx) => {
-                    const event = await tx.event.findUnique({ where: { id } });
-                    if (!event) {
-                        return { code: 404, error: { message: "Event not found" } };
-                    }
-                    // Event ismini güncelle
-                    const updatedEvent = await tx.event.update({
-                        where: { id },
-                        data: { name, culture },
-                    });
-                    // Tag ekleme işlemi
-                    if (tagIds.length > 0) {
-                        const existingTags = await tx.eventToEventTag.findMany({
-                            where: {
-                                event_id: id,
-                                event_tag_id: { in: tagIds },
-                            },
-                            select: { event_tag_id: true },
-                        });
-                        const existingTagIds = new Set(existingTags.map((t) => t.event_tag_id));
-                        const newTagIds = tagIds.filter((tagId) => !existingTagIds.has(tagId));
-                        if (newTagIds.length > 0) {
-                            await tx.eventToEventTag.createMany({
-                                data: newTagIds.map((tagId) => ({
-                                    event_id: id,
-                                    event_tag_id: tagId,
-                                })),
-                                skipDuplicates: true,
-                            });
-                        }
-                    }
-                    return { updatedEvent };
+                const event = await prisma.event.findUnique({
+                    where: { id },
+                    include: { matches: true },
                 });
-                if ("error" in result) {
-                    return reply.code(result.code ?? 500).send(result.error);
+                if (!event) {
+                    return reply.status(404).send({ message: "Event not found" });
                 }
-                reply.code(201).send(result.updatedEvent);
+                reply.code(200).send(event);
             }
             catch (error) {
+                console.error(error);
                 reply.code(500).send({ message: "Internal Server Error" });
             }
         },
     });
+    // UPDATE event by id (replace matches)
     fastify.withTypeProvider().route({
+        method: "PUT",
         url: "/:id",
-        method: "DELETE",
         preHandler: [fastify.authenticateAdmin],
         schema: {
             tags: ["Event"],
-            summary: "Delete a Event",
+            summary: "Update event and its answer matches",
             params: v4_1.default.object({
-                id: v4_1.default.string().nonempty(),
+                id: v4_1.default.uuid(),
             }),
+            body: v4_1.default.object({
+                name: v4_1.default.string(),
+                description: v4_1.default.string().optional(),
+                culture: v4_1.default.string().optional(),
+                answerIds: v4_1.default.array(v4_1.default.string()).nonempty(),
+            }),
+            response: {
+                200: v4_1.default.object({
+                    id: v4_1.default.string(),
+                    name: v4_1.default.string().nullable(),
+                    description: v4_1.default.string().nullable(),
+                    culture: v4_1.default.string().nullable(),
+                    matches: v4_1.default.array(v4_1.default.object({
+                        id: v4_1.default.string(),
+                        answerId: v4_1.default.string(),
+                    })),
+                }),
+                404: v4_1.default.object({ message: v4_1.default.string() }),
+                500: v4_1.default.object({ message: v4_1.default.string() }),
+            },
+        },
+        handler: async (req, reply) => {
+            const { id } = req.params;
+            const { name, description, culture, answerIds } = req.body;
+            try {
+                const existing = await prisma.event.findUnique({ where: { id } });
+                if (!existing) {
+                    return reply.status(404).send({ message: "Event not found" });
+                }
+                const updated = await prisma.$transaction(async (tx) => {
+                    // matches'i temizle
+                    await tx.eventMatch.deleteMany({ where: { eventId: id } });
+                    // event güncelle
+                    const ev = await tx.event.update({
+                        where: { id },
+                        data: {
+                            name,
+                            description,
+                            culture,
+                            matches: {
+                                create: answerIds.map((answerId) => ({
+                                    answerId,
+                                })),
+                            },
+                        },
+                        include: { matches: true },
+                    });
+                    return ev;
+                });
+                reply.code(200).send(updated);
+            }
+            catch (error) {
+                console.error(error);
+                reply.code(500).send({ message: "Internal Server Error" });
+            }
+        },
+    });
+    // DELETE event by id
+    fastify.withTypeProvider().route({
+        method: "DELETE",
+        url: "/:id",
+        preHandler: [fastify.authenticateAdmin],
+        schema: {
+            tags: ["Event"],
+            summary: "Delete an event and its matches",
+            params: v4_1.default.object({
+                id: v4_1.default.uuid(),
+            }),
+            response: {
+                204: v4_1.default.null(),
+                404: v4_1.default.object({ message: v4_1.default.string() }),
+                500: v4_1.default.object({ message: v4_1.default.string() }),
+            },
         },
         handler: async (req, reply) => {
             const { id } = req.params;
             try {
-                const result = await prisma.$transaction(async (tx) => {
-                    var event = await tx.event.findFirst({ where: { id: id } });
-                    if (!event) {
-                        return { code: 404, error: { message: "Event not found" } };
-                    }
-                    await tx.eventToEventTag.deleteMany({
-                        where: { event_id: id },
-                    });
-                    const deletedEvent = await tx.event.delete({
-                        where: { id },
-                    });
-                    return { deletedEvent };
+                const existing = await prisma.event.findUnique({ where: { id } });
+                if (!existing) {
+                    return reply.status(404).send({ message: "Event not found" });
+                }
+                await prisma.$transaction(async (tx) => {
+                    await tx.eventMatch.deleteMany({ where: { eventId: id } });
+                    await tx.event.delete({ where: { id } });
                 });
-                reply.code(200).send(result.deletedEvent);
+                reply.code(204).send(null);
             }
             catch (error) {
-                reply.code(500).send({ message: "Internal Server Error", error });
-            }
-        },
-    });
-    fastify.withTypeProvider().route({
-        url: "/eventToEventTag/:eventId/:eventTagId",
-        method: "PUT",
-        preHandler: [fastify.authenticateAdmin],
-        schema: {
-            tags: ["Event"],
-            summary: "Add To Event A Event Tag",
-            params: v4_1.default.object({
-                eventId: v4_1.default.string().nonempty(),
-                eventTagId: v4_1.default.string().nonempty(),
-            }),
-        },
-        handler: async (req, reply) => {
-            const { eventId, eventTagId } = req.params;
-            try {
-                const result = await prisma.$transaction(async (tx) => {
-                    var event = await tx.event.findFirst({
-                        where: { id: event },
-                    });
-                    if (!event) {
-                        return {
-                            code: 404,
-                            error: { message: "Event not found" },
-                        };
-                    }
-                    var eventTag = await tx.eventTag.findFirst({
-                        where: { id: eventTagId },
-                    });
-                    if (!eventTag) {
-                        return {
-                            code: 404,
-                            error: { message: "Event tag not found" },
-                        };
-                    }
-                    var eventToEventTagExists = await tx.eventToEventTag.findFirst({
-                        where: { event_id: eventId, event_tag_id: eventTagId },
-                    });
-                    if (eventToEventTagExists) {
-                        return {
-                            code: 409,
-                            error: { message: "Event To Event tag already added" },
-                        };
-                    }
-                    var eventToEventTagCreated = await tx.eventToEventTag.create({
-                        data: { event_id: eventId, event_tag_id: eventTagId },
-                    });
-                    return { eventToEventTagCreated };
-                });
-                reply.code(200).send(result.eventToEventTagCreated);
-            }
-            catch (error) {
-                reply.code(500).send({ message: "Internal Server Error", error });
-            }
-        },
-    });
-    fastify.withTypeProvider().route({
-        url: "/eventToEventTag/:eventToEventTagId",
-        method: "DELETE",
-        preHandler: [fastify.authenticateAdmin],
-        schema: {
-            tags: ["Event"],
-            summary: "Delete a Event To Event Tag",
-            params: v4_1.default.object({
-                eventToEventTagId: v4_1.default.string().nonempty(),
-            }),
-        },
-        handler: async (req, reply) => {
-            const { eventToEventTagId } = req.params;
-            try {
-                const result = await prisma.$transaction(async (tx) => {
-                    var eventToEventTag = await tx.eventToEventTag.findFirst({
-                        where: { id: eventToEventTagId },
-                    });
-                    if (!eventToEventTag) {
-                        return {
-                            code: 404,
-                            error: { message: "Event to event tag not found" },
-                        };
-                    }
-                    const deletedEventToEventTag = await tx.eventToEventTag.delete({
-                        where: { id: eventToEventTagId },
-                    });
-                    return { deletedEventToEventTag };
-                });
-                reply.code(200).send(result.deletedEventToEventTag);
-            }
-            catch (error) {
-                reply.code(500).send({ message: "Internal Server Error", error });
+                console.error(error);
+                reply.code(500).send({ message: "Internal Server Error" });
             }
         },
     });
