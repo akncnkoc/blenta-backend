@@ -377,4 +377,103 @@ async function eventRoutes(fastify) {
             }
         },
     });
+    // UPDATE event by id (replace matches)
+    fastify.withTypeProvider().route({
+        method: "PUT",
+        url: "/:id/like-event",
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ["Event"],
+            summary: "Like event",
+            params: v4_1.default.object({
+                id: v4_1.default.uuid(),
+            }),
+            response: {
+                200: v4_1.default.object({
+                    message: v4_1.default.string(),
+                }),
+                404: v4_1.default.object({ message: v4_1.default.string() }),
+                500: v4_1.default.object({ message: v4_1.default.string() }),
+            },
+        },
+        handler: async (req, reply) => {
+            const userId = req.user.id;
+            const { id } = req.params;
+            try {
+                const existing = await prisma.event.findUnique({ where: { id } });
+                if (!existing) {
+                    return reply.status(404).send({ message: "Event not found" });
+                }
+                var userLikedEvent = await prisma.userLikedEvent.findFirst({
+                    where: {
+                        userId,
+                        eventId: id,
+                    },
+                });
+                if (userLikedEvent) {
+                    return reply.status(409).send({ message: "Event already liked" });
+                }
+                await prisma.userLikedEvent.create({
+                    data: {
+                        userId,
+                        eventId: id,
+                    },
+                });
+                reply.code(200).send({ message: "User liked event" });
+            }
+            catch (error) {
+                console.error(error);
+                reply.code(500).send({ message: "Internal Server Error" });
+            }
+        },
+    });
+    fastify.withTypeProvider().route({
+        method: "PUT",
+        url: "/:id/unlike-event",
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ["Event"],
+            summary: "Unlike event",
+            params: v4_1.default.object({
+                id: v4_1.default.uuid(),
+            }),
+            response: {
+                200: v4_1.default.object({
+                    message: v4_1.default.string(),
+                }),
+                404: v4_1.default.object({ message: v4_1.default.string() }),
+                500: v4_1.default.object({ message: v4_1.default.string() }),
+            },
+        },
+        handler: async (req, reply) => {
+            const userId = req.user.id;
+            const { id } = req.params;
+            try {
+                const existing = await prisma.event.findUnique({ where: { id } });
+                if (!existing) {
+                    return reply.status(404).send({ message: "Event not found" });
+                }
+                var userLikedEvent = await prisma.userLikedEvent.findFirst({
+                    where: {
+                        userId,
+                        eventId: id,
+                    },
+                });
+                if (!userLikedEvent) {
+                    return reply.status(409).send({ message: "Event not liked before" });
+                }
+                await prisma.userLikedEvent.deleteMany({
+                    where: {
+                        userId,
+                        eventId: id,
+                    },
+                });
+                reply.code(200).send({ message: "User unliked event" });
+            }
+            catch (error) {
+                console.error(error);
+                reply.code(500).send({ message: "Internal Server Error" });
+            }
+        },
+    });
 }

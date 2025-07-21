@@ -36,6 +36,18 @@ export default async function userRoutes(fastify: FastifyInstance) {
               isRegistered: z.boolean(),
               referenceCode: z.string(),
               userAppVersion: z.string().nullable(),
+              userLikedEvents: z.array(
+                z.object({
+                  id: z.string(),
+                  userId: z.string(),
+                  eventId: z.string(),
+                  event: z.object({
+                    id: z.string(),
+                    name: z.string().nullable(),
+                    description: z.string().nullable(),
+                  }),
+                }),
+              ),
               likedQuestions: z.array(
                 z.object({
                   id: z.string(),
@@ -111,6 +123,17 @@ export default async function userRoutes(fastify: FastifyInstance) {
               },
             },
             userViewedQuestions: true,
+            userLikedEvents: {
+              include: {
+                event: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                  },
+                },
+              },
+            },
           },
         }),
         prisma.userPromotionCode.findFirst({

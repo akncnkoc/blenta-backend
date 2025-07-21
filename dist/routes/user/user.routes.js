@@ -36,6 +36,16 @@ async function userRoutes(fastify) {
                         isRegistered: v4_1.default.boolean(),
                         referenceCode: v4_1.default.string(),
                         userAppVersion: v4_1.default.string().nullable(),
+                        userLikedEvents: v4_1.default.array(v4_1.default.object({
+                            id: v4_1.default.string(),
+                            userId: v4_1.default.string(),
+                            eventId: v4_1.default.string(),
+                            event: v4_1.default.object({
+                                id: v4_1.default.string(),
+                                name: v4_1.default.string().nullable(),
+                                description: v4_1.default.string().nullable(),
+                            }),
+                        })),
                         likedQuestions: v4_1.default.array(v4_1.default.object({
                             id: v4_1.default.string(),
                             userId: v4_1.default.string(),
@@ -99,6 +109,17 @@ async function userRoutes(fastify) {
                             },
                         },
                         userViewedQuestions: true,
+                        userLikedEvents: {
+                            include: {
+                                event: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        description: true,
+                                    },
+                                },
+                            },
+                        },
                     },
                 }),
                 prisma.userPromotionCode.findFirst({

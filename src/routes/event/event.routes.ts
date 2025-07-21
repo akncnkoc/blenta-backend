@@ -427,4 +427,111 @@ export default async function eventRoutes(fastify: FastifyInstance) {
       }
     },
   });
+
+  // UPDATE event by id (replace matches)
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    method: "PUT",
+    url: "/:id/like-event",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Event"],
+      summary: "Like event",
+      params: z.object({
+        id: z.uuid(),
+      }),
+      response: {
+        200: z.object({
+          message: z.string(),
+        }),
+        404: z.object({ message: z.string() }),
+        500: z.object({ message: z.string() }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+      const { id } = req.params;
+
+      try {
+        const existing = await prisma.event.findUnique({ where: { id } });
+        if (!existing) {
+          return reply.status(404).send({ message: "Event not found" });
+        }
+
+        var userLikedEvent = await prisma.userLikedEvent.findFirst({
+          where: {
+            userId,
+            eventId: id,
+          },
+        });
+        if (userLikedEvent) {
+          return reply.status(409).send({ message: "Event already liked" });
+        }
+
+        await prisma.userLikedEvent.create({
+          data: {
+            userId,
+            eventId: id,
+          },
+        });
+
+        reply.code(200).send({ message: "User liked event" });
+      } catch (error) {
+        console.error(error);
+        reply.code(500).send({ message: "Internal Server Error" });
+      }
+    },
+  });
+
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    method: "PUT",
+    url: "/:id/unlike-event",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Event"],
+      summary: "Unlike event",
+      params: z.object({
+        id: z.uuid(),
+      }),
+      response: {
+        200: z.object({
+          message: z.string(),
+        }),
+        404: z.object({ message: z.string() }),
+        500: z.object({ message: z.string() }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+      const { id } = req.params;
+
+      try {
+        const existing = await prisma.event.findUnique({ where: { id } });
+        if (!existing) {
+          return reply.status(404).send({ message: "Event not found" });
+        }
+
+        var userLikedEvent = await prisma.userLikedEvent.findFirst({
+          where: {
+            userId,
+            eventId: id,
+          },
+        });
+        if (!userLikedEvent) {
+          return reply.status(409).send({ message: "Event not liked before" });
+        }
+
+        await prisma.userLikedEvent.deleteMany({
+          where: {
+            userId,
+            eventId: id,
+          },
+        });
+
+        reply.code(200).send({ message: "User unliked event" });
+      } catch (error) {
+        console.error(error);
+        reply.code(500).send({ message: "Internal Server Error" });
+      }
+    },
+  });
 }
