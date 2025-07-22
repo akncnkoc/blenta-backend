@@ -58,10 +58,8 @@ export default async function eventRoutes(fastify: FastifyInstance) {
           now.getDate(),
         );
 
-        let shouldReset = false;
-        if (!user.eventSearchLastDate) {
-          shouldReset = true;
-        } else {
+        let shouldReset = !user.eventSearchLastDate;
+        if (user.eventSearchLastDate) {
           const lastSearchDate = new Date(user.eventSearchLastDate);
           const lastDate = new Date(
             lastSearchDate.getFullYear(),
@@ -72,6 +70,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
         }
 
         const isPremium = await isPaidMembership(user.id);
+
         if (!isPremium) {
           if (!shouldReset && user.eventSearchCount >= 3) {
             return reply
@@ -79,12 +78,10 @@ export default async function eventRoutes(fastify: FastifyInstance) {
               .send({ message: "Daily search limit reached" });
           }
 
-          const newSearchCount = shouldReset ? 1 : user.eventSearchCount + 1;
-
           await prisma.user.update({
             where: { id: userId },
             data: {
-              eventSearchCount: newSearchCount,
+              eventSearchCount: shouldReset ? 1 : user.eventSearchCount + 1,
               eventSearchLastDate: now,
             },
           });
@@ -104,17 +101,17 @@ export default async function eventRoutes(fastify: FastifyInstance) {
           description: string | null;
           culture: string;
         }[];
+
         const safeEvents = events.map((e) => ({
-          id: e.id.toString(), // Convert BigInt to string for JSON serialization
+          id: e.id.toString(),
           name: e.name,
           description: e.description,
           culture: e.culture,
         }));
-        console.log("Response data:", JSON.stringify(safeEvents, null, 2));
 
         return reply.code(200).send(safeEvents);
       } catch (error) {
-        console.error(error);
+        console.error("Event Finder Error:", error);
         return reply.code(500).send({ message: "Internal Server Error" });
       }
     },

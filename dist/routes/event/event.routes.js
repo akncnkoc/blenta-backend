@@ -49,11 +49,8 @@ async function eventRoutes(fastify) {
                 }
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                let shouldReset = false;
-                if (!user.eventSearchLastDate) {
-                    shouldReset = true;
-                }
-                else {
+                let shouldReset = !user.eventSearchLastDate;
+                if (user.eventSearchLastDate) {
                     const lastSearchDate = new Date(user.eventSearchLastDate);
                     const lastDate = new Date(lastSearchDate.getFullYear(), lastSearchDate.getMonth(), lastSearchDate.getDate());
                     shouldReset = lastDate.getTime() !== today.getTime();
@@ -65,11 +62,10 @@ async function eventRoutes(fastify) {
                             .code(429)
                             .send({ message: "Daily search limit reached" });
                     }
-                    const newSearchCount = shouldReset ? 1 : user.eventSearchCount + 1;
                     await prisma.user.update({
                         where: { id: userId },
                         data: {
-                            eventSearchCount: newSearchCount,
+                            eventSearchCount: shouldReset ? 1 : user.eventSearchCount + 1,
                             eventSearchLastDate: now,
                         },
                     });
@@ -84,16 +80,15 @@ async function eventRoutes(fastify) {
           HAVING COUNT(DISTINCT a.text) = ${answerTexts.length}
         `);
                 const safeEvents = events.map((e) => ({
-                    id: e.id.toString(), // Convert BigInt to string for JSON serialization
+                    id: e.id.toString(),
                     name: e.name,
                     description: e.description,
                     culture: e.culture,
                 }));
-                console.log("Response data:", JSON.stringify(safeEvents, null, 2));
                 return reply.code(200).send(safeEvents);
             }
             catch (error) {
-                console.error(error);
+                console.error("Event Finder Error:", error);
                 return reply.code(500).send({ message: "Internal Server Error" });
             }
         },
