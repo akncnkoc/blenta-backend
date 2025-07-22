@@ -20,7 +20,12 @@ async function eventRoutes(fastify) {
                 answerTexts: v4_1.default.array(v4_1.default.string().min(1)).nonempty(),
             }),
             response: {
-                200: v4_1.default.any(),
+                200: v4_1.default.array(v4_1.default.object({
+                    id: v4_1.default.string(),
+                    name: v4_1.default.string(),
+                    description: v4_1.default.string().nullable(),
+                    culture: v4_1.default.string(),
+                })),
                 400: v4_1.default.object({ message: v4_1.default.string() }),
                 429: v4_1.default.object({ message: v4_1.default.string() }),
                 500: v4_1.default.object({ message: v4_1.default.string() }),
@@ -60,7 +65,6 @@ async function eventRoutes(fastify) {
                             .code(429)
                             .send({ message: "Daily search limit reached" });
                     }
-                    // Günlük limit sıfırlanacaksa sıfırla
                     const newSearchCount = shouldReset ? 1 : user.eventSearchCount + 1;
                     await prisma.user.update({
                         where: { id: userId },
@@ -71,15 +75,21 @@ async function eventRoutes(fastify) {
                     });
                 }
                 const events = (await prisma.$queryRaw `
-        SELECT e.id, e.name, e.description, e.culture
-        FROM events e
-        JOIN event_matches em ON em."eventId" = e.id
-        JOIN event_question_answers a ON a.id = em."answerId"
-        WHERE a.text = ANY(${answerTexts})
-        GROUP BY e.id
-        HAVING COUNT(DISTINCT a.text) = ${answerTexts.length}
-      `);
-                return reply.code(200).send(events);
+          SELECT e.id, e.name, e.description, e.culture
+          FROM events e
+          JOIN event_matches em ON em."eventId" = e.id
+          JOIN event_question_answers a ON a.id = em."answerId"
+          WHERE a.text = ANY(${answerTexts})
+          GROUP BY e.id
+          HAVING COUNT(DISTINCT a.text) = ${answerTexts.length}
+        `);
+                const safeEvents = events.map((e) => ({
+                    id: e.id.toString(), // Convert BigInt to string for JSON serialization
+                    name: e.name,
+                    description: e.description,
+                    culture: e.culture,
+                }));
+                return reply.code(200).send(safeEvents);
             }
             catch (error) {
                 console.error(error);
