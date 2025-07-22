@@ -104,13 +104,13 @@ export default async function eventRoutes(fastify: FastifyInstance) {
           description: string | null;
           culture: string;
         }[];
-
         const safeEvents = events.map((e) => ({
           id: e.id.toString(), // Convert BigInt to string for JSON serialization
           name: e.name,
           description: e.description,
           culture: e.culture,
         }));
+        console.log("Response data:", JSON.stringify(safeEvents, null, 2));
 
         return reply.code(200).send(safeEvents);
       } catch (error) {

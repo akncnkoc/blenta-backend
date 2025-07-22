@@ -89,6 +89,7 @@ async function eventRoutes(fastify) {
                     description: e.description,
                     culture: e.culture,
                 }));
+                console.log("Response data:", JSON.stringify(safeEvents, null, 2));
                 return reply.code(200).send(safeEvents);
             }
             catch (error) {
