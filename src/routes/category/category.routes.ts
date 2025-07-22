@@ -17,6 +17,7 @@ const CategorySchema: z.ZodType<any> = z.lazy(() =>
     isRefCat: z.boolean(),
     type: z.enum(["QUESTION", "TEST"]),
     questionCount: z.number(),
+    isCategoryCompleted: z.boolean(),
     isCategoryLiked: z.boolean(),
     isUserReferenced: z.boolean().nullable().optional(),
     categoryTags: z.array(
@@ -223,9 +224,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
 
       try {
         const enrichedCategory = await prisma.$transaction(async (tx) => {
-          const admin = await tx.admin.findFirst({
-            where: { id: userId },
-          });
+          const admin = await tx.admin.findFirst({ where: { id: userId } });
 
           const user = await tx.user.findFirst({
             where: { id: userId },
@@ -247,18 +246,20 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           }
 
           if (!admin && user) {
-            var userIsPremium = await isPaidMembership(user.id);
-            if (root.isPremiumCat && userIsPremium) {
+            const userIsPremium = await isPaidMembership(user.id);
+
+            if (root.isPremiumCat && !userIsPremium) {
               return {
                 code: 409,
                 error: { message: "This user has no right to see category" },
               };
             }
+
             if (
               root.isRefCat &&
-              user?.userReferencedCategories.findIndex(
+              !user.userReferencedCategories.some(
                 (x) => x.categoryId === root.id,
-              ) === -1
+              )
             ) {
               return {
                 code: 409,
@@ -275,26 +276,34 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               user?.userReferencedCategories.some(
                 (x) => x.categoryId === category.id,
               ) ?? false;
-            const [questionCount, isLiked, tags, children] = await Promise.all([
-              tx.question.count({ where: { categoryId: category.id } }),
-              tx.userLikedCategory.findFirst({
-                where: { categoryId: category.id, userId },
-              }),
-              tx.category.findUnique({
-                where: { id: category.id },
-                select: {
-                  categoryTags: {
-                    select: {
-                      tag: { select: { id: true, name: true } },
+
+            const [questionCount, isLiked, tags, children, isCompleted] =
+              await Promise.all([
+                tx.question.count({ where: { categoryId: category.id } }),
+                tx.userLikedCategory.findFirst({
+                  where: { categoryId: category.id, userId },
+                }),
+                tx.category.findUnique({
+                  where: { id: category.id },
+                  select: {
+                    categoryTags: {
+                      select: {
+                        tag: { select: { id: true, name: true } },
+                      },
                     },
                   },
-                },
-              }),
-              tx.category.findMany({
-                where: { parentCategoryId: category.id },
-                orderBy: { sort: "asc" },
-              }),
-            ]);
+                }),
+                tx.category.findMany({
+                  where: { parentCategoryId: category.id },
+                  orderBy: { sort: "asc" },
+                }),
+                tx.userCompletedCategory.findFirst({
+                  where: {
+                    userId,
+                    categoryId: category.id,
+                  },
+                }),
+              ]);
 
             const childEnriched = await Promise.all(
               children.map((child) =>
@@ -330,6 +339,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
               categoryTags: tags?.categoryTags.map((ct) => ct.tag) || [],
               childCategories: childEnriched,
               isUserReferenced,
+              isCategoryCompleted: !!isCompleted,
             };
           };
 

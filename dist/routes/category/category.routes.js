@@ -20,6 +20,7 @@ const CategorySchema = v4_1.default.lazy(() => v4_1.default.object({
     isRefCat: v4_1.default.boolean(),
     type: v4_1.default.enum(["QUESTION", "TEST"]),
     questionCount: v4_1.default.number(),
+    isCategoryCompleted: v4_1.default.boolean(),
     isCategoryLiked: v4_1.default.boolean(),
     isUserReferenced: v4_1.default.boolean().nullable().optional(),
     categoryTags: v4_1.default.array(v4_1.default.object({
@@ -206,9 +207,7 @@ async function categoryRoutes(fastify) {
             const { id } = req.params;
             try {
                 const enrichedCategory = await prisma.$transaction(async (tx) => {
-                    const admin = await tx.admin.findFirst({
-                        where: { id: userId },
-                    });
+                    const admin = await tx.admin.findFirst({ where: { id: userId } });
                     const user = await tx.user.findFirst({
                         where: { id: userId },
                         include: { userReferencedCategories: true },
@@ -226,15 +225,15 @@ async function categoryRoutes(fastify) {
                         return { code: 404, error: { message: "Category not found" } };
                     }
                     if (!admin && user) {
-                        var userIsPremium = await (0, isPaidMembership_1.isPaidMembership)(user.id);
-                        if (root.isPremiumCat && userIsPremium) {
+                        const userIsPremium = await (0, isPaidMembership_1.isPaidMembership)(user.id);
+                        if (root.isPremiumCat && !userIsPremium) {
                             return {
                                 code: 409,
                                 error: { message: "This user has no right to see category" },
                             };
                         }
                         if (root.isRefCat &&
-                            user?.userReferencedCategories.findIndex((x) => x.categoryId === root.id) === -1) {
+                            !user.userReferencedCategories.some((x) => x.categoryId === root.id)) {
                             return {
                                 code: 409,
                                 error: { message: "This user has no right to see category" },
@@ -243,7 +242,7 @@ async function categoryRoutes(fastify) {
                     }
                     const enrichCategory = async (category, currentUser) => {
                         const isUserReferenced = user?.userReferencedCategories.some((x) => x.categoryId === category.id) ?? false;
-                        const [questionCount, isLiked, tags, children] = await Promise.all([
+                        const [questionCount, isLiked, tags, children, isCompleted] = await Promise.all([
                             tx.question.count({ where: { categoryId: category.id } }),
                             tx.userLikedCategory.findFirst({
                                 where: { categoryId: category.id, userId },
@@ -261,6 +260,12 @@ async function categoryRoutes(fastify) {
                             tx.category.findMany({
                                 where: { parentCategoryId: category.id },
                                 orderBy: { sort: "asc" },
+                            }),
+                            tx.userCompletedCategory.findFirst({
+                                where: {
+                                    userId,
+                                    categoryId: category.id,
+                                },
                             }),
                         ]);
                         const childEnriched = await Promise.all(children.map((child) => tx.category
@@ -292,6 +297,7 @@ async function categoryRoutes(fastify) {
                             categoryTags: tags?.categoryTags.map((ct) => ct.tag) || [],
                             childCategories: childEnriched,
                             isUserReferenced,
+                            isCategoryCompleted: !!isCompleted,
                         };
                     };
                     return await enrichCategory(root, user);
