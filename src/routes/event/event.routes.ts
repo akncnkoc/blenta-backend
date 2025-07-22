@@ -19,7 +19,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
         answerTexts: z.array(z.string().min(1)).nonempty(),
       }),
       response: {
-        200: z.array(z.any()),
+        200: z.any(),
         400: z.object({ message: z.string() }),
         429: z.object({ message: z.string() }),
         500: z.object({ message: z.string() }),
