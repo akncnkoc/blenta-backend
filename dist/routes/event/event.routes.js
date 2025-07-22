@@ -20,12 +20,7 @@ async function eventRoutes(fastify) {
                 answerTexts: v4_1.default.array(v4_1.default.string().min(1)).nonempty(),
             }),
             response: {
-                200: v4_1.default.array(v4_1.default.object({
-                    id: v4_1.default.string(),
-                    name: v4_1.default.string().nullable(),
-                    description: v4_1.default.string().nullable(),
-                    culture: v4_1.default.string().nullable(),
-                })),
+                200: v4_1.default.array(v4_1.default.any()),
                 400: v4_1.default.object({ message: v4_1.default.string() }),
                 429: v4_1.default.object({ message: v4_1.default.string() }),
                 500: v4_1.default.object({ message: v4_1.default.string() }),
