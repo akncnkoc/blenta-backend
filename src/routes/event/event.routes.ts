@@ -25,6 +25,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
             name: z.string(),
             description: z.string().nullable(),
             culture: z.string(),
+            isUserLiked: z.boolean(),
           }),
         ),
         400: z.object({ message: z.string() }),
@@ -87,32 +88,43 @@ export default async function eventRoutes(fastify: FastifyInstance) {
           });
         }
 
-        // Normalize and lowercase text for case/diacritic-insensitive match
         const normalizedAnswerTexts = answerTexts.map((t) =>
           t.normalize("NFC").toLowerCase(),
         );
 
-        // Raw SQL with ILIKE for case-insensitive match
         const events = (await prisma.$queryRaw`
-          SELECT e.id, e.name, e.description, e.culture
-          FROM events e
-          JOIN event_matches em ON em."eventId" = e.id
-          JOIN event_question_answers a ON a.id = em."answerId"
-          WHERE LOWER(a.text) = ANY(${normalizedAnswerTexts})
-          GROUP BY e.id
-          HAVING COUNT(DISTINCT LOWER(a.text)) = ${normalizedAnswerTexts.length}
-        `) as {
+        SELECT e.id, e.name, e.description, e.culture
+        FROM events e
+        JOIN event_matches em ON em."eventId" = e.id
+        JOIN event_question_answers a ON a.id = em."answerId"
+        WHERE LOWER(a.text) = ANY(${normalizedAnswerTexts})
+        GROUP BY e.id
+        HAVING COUNT(DISTINCT LOWER(a.text)) = ${normalizedAnswerTexts.length}
+      `) as {
           id: bigint;
           name: string;
           description: string | null;
           culture: string;
         }[];
 
+        const eventIds = events.map((e) => e.id.toString());
+
+        const likedEvents = await prisma.userLikedEvent.findMany({
+          where: {
+            userId,
+            eventId: { in: eventIds },
+          },
+          select: { eventId: true },
+        });
+
+        const likedEventIdSet = new Set(likedEvents.map((e) => e.eventId));
+
         const safeEvents = events.map((e) => ({
           id: e.id.toString(),
           name: e.name,
           description: e.description,
           culture: e.culture,
+          isUserLiked: likedEventIdSet.has(e.id.toString()),
         }));
 
         return reply.code(200).send(safeEvents);
