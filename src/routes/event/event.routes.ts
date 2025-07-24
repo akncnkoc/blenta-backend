@@ -72,7 +72,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
         const isPremium = await isPaidMembership(user.id);
 
         if (!isPremium) {
-          if (!shouldReset && user.eventSearchCount >= 3) {
+          if (!shouldReset && user.eventSearchCount >= 1000) {
             return reply
               .code(429)
               .send({ message: "Daily search limit reached" });
@@ -159,7 +159,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
   });
   fastify.withTypeProvider<ZodTypeProvider>().route({
     method: "GET",
-    url: "/event/get-recent-events",
+    url: "/get-recent-events",
     preHandler: [fastify.authenticate],
     schema: {
       tags: ["Event"],
