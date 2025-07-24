@@ -1,9 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import z from "zod/v4";
-import { Event, Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { isPaidMembership } from "../../lib/isPaidMembership";
-import { describe } from "node:test";
 const prisma = new PrismaClient();
 
 export default async function eventRoutes(fastify: FastifyInstance) {
@@ -73,7 +72,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
         const isPremium = await isPaidMembership(user.id);
 
         if (!isPremium) {
-          if (!shouldReset && user.eventSearchCount >= 1000) {
+          if (!shouldReset && user.eventSearchCount >= 3) {
             return reply
               .code(429)
               .send({ message: "Daily search limit reached" });
@@ -93,21 +92,113 @@ export default async function eventRoutes(fastify: FastifyInstance) {
         );
 
         const events = (await prisma.$queryRaw`
-        SELECT e.id, e.name, e.description, e.culture
-        FROM events e
-        JOIN event_matches em ON em."eventId" = e.id
-        JOIN event_question_answers a ON a.id = em."answerId"
-        WHERE LOWER(a.text) = ANY(${normalizedAnswerTexts})
-        GROUP BY e.id
-        HAVING COUNT(DISTINCT LOWER(a.text)) = ${normalizedAnswerTexts.length}
-      `) as {
+      SELECT e.id, e.name, e.description, e.culture
+      FROM events e
+      JOIN event_matches em ON em."eventId" = e.id
+      JOIN event_question_answers a ON a.id = em."answerId"
+      WHERE LOWER(a.text) = ANY(${normalizedAnswerTexts})
+      GROUP BY e.id
+      HAVING COUNT(DISTINCT LOWER(a.text)) = ${normalizedAnswerTexts.length}
+    `) as {
           id: bigint;
           name: string;
           description: string | null;
           culture: string;
         }[];
 
-        const eventIds = events.map((e) => e.id.toString());
+        if (events.length === 0) {
+          return reply.code(200).send([]);
+        }
+
+        // Pick one random event
+        const randomEvent = events[Math.floor(Math.random() * events.length)];
+        const eventId = randomEvent.id.toString();
+
+        // Save to UserViewedEvent
+        await prisma.userViewedEvent.create({
+          data: {
+            userId,
+            eventId,
+          },
+        });
+
+        // Check if more than 3 events exist, delete the oldest
+        const viewedEvents = await prisma.userViewedEvent.findMany({
+          where: { userId },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        });
+
+        if (viewedEvents.length > 3) {
+          const oldest = viewedEvents[0];
+          await prisma.userViewedEvent.delete({ where: { id: oldest.id } });
+        }
+
+        // Check if user liked the random event
+        const isLiked = await prisma.userLikedEvent.findFirst({
+          where: {
+            userId,
+            eventId,
+          },
+        });
+
+        return reply.code(200).send([
+          {
+            id: eventId,
+            name: randomEvent.name,
+            description: randomEvent.description,
+            culture: randomEvent.culture,
+            isUserLiked: Boolean(isLiked),
+          },
+        ]);
+      } catch (error) {
+        console.error("Event Finder Error:", error);
+        return reply.code(500).send({ message: "Internal Server Error" });
+      }
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    method: "GET",
+    url: "/event/get-recent-events",
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ["Event"],
+      summary: "Get last 3 viewed events for the authenticated user",
+      response: {
+        200: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string().nullable(),
+            culture: z.string().nullable(),
+            description: z.string().nullable(),
+            isUserLiked: z.boolean(),
+          }),
+        ),
+        401: z.object({ message: z.string() }),
+        500: z.object({ message: z.string() }),
+      },
+    },
+    handler: async (req, reply) => {
+      const userId = req.user.id;
+
+      try {
+        const recentViews = await prisma.userViewedEvent.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+          take: 3,
+          select: {
+            event: {
+              select: {
+                id: true,
+                name: true,
+                culture: true,
+                description: true,
+              },
+            },
+          },
+        });
+
+        const eventIds = recentViews.map((v) => v.event.id);
 
         const likedEvents = await prisma.userLikedEvent.findMany({
           where: {
@@ -117,19 +208,19 @@ export default async function eventRoutes(fastify: FastifyInstance) {
           select: { eventId: true },
         });
 
-        const likedEventIdSet = new Set(likedEvents.map((e) => e.eventId));
+        const likedSet = new Set(likedEvents.map((e) => e.eventId));
 
-        const safeEvents = events.map((e) => ({
-          id: e.id.toString(),
-          name: e.name,
-          description: e.description,
-          culture: e.culture,
-          isUserLiked: likedEventIdSet.has(e.id.toString()),
+        const result = recentViews.map((v) => ({
+          id: v.event.id,
+          name: v.event.name,
+          culture: v.event.culture,
+          description: v.event.description,
+          isUserLiked: likedSet.has(v.event.id),
         }));
 
-        return reply.code(200).send(safeEvents);
+        return reply.code(200).send(result);
       } catch (error) {
-        console.error("Event Finder Error:", error);
+        console.error("Get Recent Events Error:", error);
         return reply.code(500).send({ message: "Internal Server Error" });
       }
     },

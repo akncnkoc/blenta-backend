@@ -67,6 +67,7 @@ model User {
   userAppVersion           String?
   user_promotion_codes     UserPromotionCode[]
   userLikedEvents          UserLikedEvent[]
+  userViewedEvents         UserViewedEvent[]
 
   @@map("users")
 }
@@ -276,12 +277,13 @@ model EventQuestionAnswer {
 }
 
 model Event {
-  id                String           @id @default(uuid())
-  name              String?
-  description       String?
-  culture           String?
-  matches           EventMatch[]
-  user_liked_events UserLikedEvent[]
+  id                 String            @id @default(uuid())
+  name               String?
+  description        String?
+  culture            String?
+  matches            EventMatch[]
+  user_liked_events  UserLikedEvent[]
+  user_viewed_events UserViewedEvent[]
 
   @@map("events")
 }
@@ -307,4 +309,17 @@ model UserLikedEvent {
   event Event @relation(fields: [eventId], references: [id])
 
   @@map("user_liked_events")
+}
+
+model UserViewedEvent {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@map("user_viewed_events")
 }
