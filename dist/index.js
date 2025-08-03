@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -14,6 +47,7 @@ const jwt_1 = __importDefault(require("./plugins/jwt"));
 const question_routes_1 = __importDefault(require("./routes/question/question.routes"));
 const category_routes_1 = __importDefault(require("./routes/category/category.routes"));
 const cookie_1 = __importDefault(require("@fastify/cookie"));
+const OneSignal = __importStar(require("@onesignal/node-onesignal"));
 const fastify_type_provider_zod_1 = require("fastify-type-provider-zod");
 const cors_1 = __importDefault(require("@fastify/cors"));
 const admin_routes_1 = __importDefault(require("./routes/admin/admin.routes"));
@@ -23,6 +57,7 @@ const app_version_routes_1 = __importDefault(require("./routes/app-version/app-v
 const event_routes_1 = __importDefault(require("./routes/event/event.routes"));
 const event_question_routes_1 = __importDefault(require("./routes/event/event-question.routes"));
 const event_question_answers_routes_1 = __importDefault(require("./routes/event/event-question-answers.routes"));
+const notification_1 = __importDefault(require("./routes/notification"));
 const fastify = (0, fastify_1.default)({ logger: true }).withTypeProvider();
 const start = async () => {
     try {
@@ -83,6 +118,7 @@ const start = async () => {
         await fastify.register(question_routes_1.default, { prefix: "/question" });
         await fastify.register(event_routes_1.default, { prefix: "/event" });
         await fastify.register(event_question_routes_1.default, { prefix: "/event-question" });
+        await fastify.register(notification_1.default, { prefix: "/notification" });
         await fastify.register(event_question_answers_routes_1.default, {
             prefix: "/event-question-answer",
         });
@@ -90,12 +126,10 @@ const start = async () => {
         fastify.get("/healthcheck", { preHandler: [fastify.authenticateAdmin] }, (req, res) => {
             res.send({ message: "Success" });
         });
-        // var appId = "b8432b15-baab-4b65-8943-139bcd7a31e4";
-        // const configuration = OneSignal.createConfiguration({
-        //   organizationApiKey: "",
-        //   restApiKey:
-        //     "os_v2_app_xbbswfn2vnfwlckdcon426rr4rbxgeikxqme5buyydorgcpwil7gbqp52bsb3m22muoztiyvjijlt35hf6sm6iwphx5ymgxtcnwebpy",
-        // });
+        var appId = "b8432b15-baab-4b65-8943-139bcd7a31e4";
+        const configuration = OneSignal.createConfiguration({
+            restApiKey: "os_v2_app_xbbswfn2vnfwlckdcon426rr4rbxgeikxqme5buyydorgcpwil7gbqp52bsb3m22muoztiyvjijlt35hf6sm6iwphx5ymgxtcnwebpy",
+        });
         await fastify.listen({ port: Number(config_1.config.port), host: "0.0.0.0" });
         console.log(`🚀 Server running at http://localhost:${config_1.config.port}`);
     }

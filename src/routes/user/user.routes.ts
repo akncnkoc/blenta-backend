@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import z from "zod/v4";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 // import { getMailClient } from "../../lib/mailer";
 import {
   confirmationEmailEn,
@@ -171,6 +171,94 @@ export default async function userRoutes(fastify: FastifyInstance) {
           promotionExpiresAt,
         },
       });
+    },
+  });
+  fastify.withTypeProvider<ZodTypeProvider>().route({
+    url: "/users",
+    method: "GET",
+    preHandler: [fastify.authenticateAdmin],
+    schema: {
+      tags: ["User"],
+      summary: "Get all users with pagination and search",
+      querystring: z.object({
+        page: z.string().min(1),
+        size: z.string().min(1).max(100),
+        search: z.string().optional().nullable(),
+      }),
+      response: {
+        200: z.object({
+          data: z.array(
+            z.object({
+              id: z.string(),
+              name: z.string().nullable(),
+              surname: z.string().nullable(),
+              phoneNumber: z.string().nullable(),
+              email: z.string(),
+              createdAt: z.date(),
+            }),
+          ),
+          meta: z.object({
+            total: z.number(),
+            page: z.string(),
+            size: z.string(),
+            pageCount: z.number(),
+          }),
+        }),
+        500: z.object({
+          message: z.string(),
+        }),
+      },
+    },
+    handler: async (req, reply) => {
+      const { page, size, search } = req.query;
+
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          const whereClause: Prisma.UserWhereInput = search
+            ? {
+                OR: [
+                  { name: { contains: search, mode: "insensitive" } },
+                  { surname: { contains: search, mode: "insensitive" } },
+                  { email: { contains: search, mode: "insensitive" } },
+                ],
+              }
+            : {};
+
+          const [total, users] = await Promise.all([
+            tx.user.count({ where: whereClause }),
+            tx.user.findMany({
+              where: whereClause,
+              skip: (Number(page) - 1) * Number(size),
+              take: Number(size),
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                name: true,
+                surname: true,
+                phoneNumber: true,
+                email: true,
+                createdAt: true,
+              },
+            }),
+          ]);
+
+          return {
+            data: users,
+            meta: {
+              total,
+              page,
+              size,
+              pageCount: Math.ceil(total / Number(size)),
+            },
+          };
+        });
+
+        return reply.code(200).send(result);
+      } catch (err) {
+        return reply
+          .code(500)
+          .send({ message: "Internal Server Error: " + err });
+      }
     },
   });
   fastify.withTypeProvider<ZodTypeProvider>().route({

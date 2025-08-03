@@ -153,6 +153,89 @@ async function userRoutes(fastify) {
         },
     });
     fastify.withTypeProvider().route({
+        url: "/users",
+        method: "GET",
+        preHandler: [fastify.authenticateAdmin],
+        schema: {
+            tags: ["User"],
+            summary: "Get all users with pagination and search",
+            querystring: v4_1.default.object({
+                page: v4_1.default.string().min(1),
+                size: v4_1.default.string().min(1).max(100),
+                search: v4_1.default.string().optional().nullable(),
+            }),
+            response: {
+                200: v4_1.default.object({
+                    data: v4_1.default.array(v4_1.default.object({
+                        id: v4_1.default.string(),
+                        name: v4_1.default.string().nullable(),
+                        surname: v4_1.default.string().nullable(),
+                        phoneNumber: v4_1.default.string().nullable(),
+                        email: v4_1.default.string(),
+                        createdAt: v4_1.default.date(),
+                    })),
+                    meta: v4_1.default.object({
+                        total: v4_1.default.number(),
+                        page: v4_1.default.string(),
+                        size: v4_1.default.string(),
+                        pageCount: v4_1.default.number(),
+                    }),
+                }),
+                500: v4_1.default.object({
+                    message: v4_1.default.string(),
+                }),
+            },
+        },
+        handler: async (req, reply) => {
+            const { page, size, search } = req.query;
+            try {
+                const result = await prisma.$transaction(async (tx) => {
+                    const whereClause = search
+                        ? {
+                            OR: [
+                                { name: { contains: search, mode: "insensitive" } },
+                                { surname: { contains: search, mode: "insensitive" } },
+                                { email: { contains: search, mode: "insensitive" } },
+                            ],
+                        }
+                        : {};
+                    const [total, users] = await Promise.all([
+                        tx.user.count({ where: whereClause }),
+                        tx.user.findMany({
+                            where: whereClause,
+                            skip: (Number(page) - 1) * Number(size),
+                            take: Number(size),
+                            orderBy: { createdAt: "desc" },
+                            select: {
+                                id: true,
+                                name: true,
+                                surname: true,
+                                phoneNumber: true,
+                                email: true,
+                                createdAt: true,
+                            },
+                        }),
+                    ]);
+                    return {
+                        data: users,
+                        meta: {
+                            total,
+                            page,
+                            size,
+                            pageCount: Math.ceil(total / Number(size)),
+                        },
+                    };
+                });
+                return reply.code(200).send(result);
+            }
+            catch (err) {
+                return reply
+                    .code(500)
+                    .send({ message: "Internal Server Error: " + err });
+            }
+        },
+    });
+    fastify.withTypeProvider().route({
         url: "/me/liked-categories",
         method: "GET",
         preHandler: [fastify.authenticate],
