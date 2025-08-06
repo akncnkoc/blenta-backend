@@ -68,7 +68,7 @@ async function eventQuestionRoutes(fastify) {
                 const questionIds = questions.map((q) => `'${q.id}'`).join(",");
                 const answers = questionIds.length > 0
                     ? await prisma.$queryRawUnsafe(`
-            SELECT eqa.id, eqa.text, eqa."question_id"
+            SELECT eqa.id, eqa.text, eqa."questionId"
             FROM "event_question_answers" eqa
             WHERE eqa."eventQuestionId" IN (${questionIds})
             ORDER BY eqa.text ASC
