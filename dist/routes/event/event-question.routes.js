@@ -70,7 +70,7 @@ async function eventQuestionRoutes(fastify) {
                     ? await prisma.$queryRawUnsafe(`
             SELECT eqa.id, eqa.text, eqa."questionId"
             FROM "event_question_answers" eqa
-            WHERE eqa."eventQuestionId" IN (${questionIds})
+            WHERE eqa."questionId" IN (${questionIds})
             ORDER BY eqa.text ASC
             `)
                     : [];

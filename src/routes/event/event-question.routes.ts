@@ -81,7 +81,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
                 `
             SELECT eqa.id, eqa.text, eqa."questionId"
             FROM "event_question_answers" eqa
-            WHERE eqa."eventQuestionId" IN (${questionIds})
+            WHERE eqa."questionId" IN (${questionIds})
             ORDER BY eqa.text ASC
             `,
               )
