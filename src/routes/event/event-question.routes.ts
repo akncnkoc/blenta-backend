@@ -48,35 +48,67 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
       const sizeNum = Math.max(1, parseInt(size));
 
       try {
-        const where = {
-          ...(lang ? { culture: lang } : {}),
-          ...(search
-            ? { text: { contains: search, mode: Prisma.QueryMode.insensitive } }
-            : {}),
-        };
+        // WHERE koşulları oluştur
+        const whereClauseParts: string[] = [];
+        if (lang) whereClauseParts.push(`eq."culture" = '${lang}'`);
+        if (search) whereClauseParts.push(`eq."text" ILIKE '%${search}%'`);
+        const whereClause =
+          whereClauseParts.length > 0
+            ? `WHERE ${whereClauseParts.join(" AND ")}`
+            : "";
 
-        const [questions, total] = await Promise.all([
-          prisma.eventQuestion.findMany({
-            skip: (pageNum - 1) * sizeNum,
-            take: sizeNum,
-            where,
-            include: {
-              answers: {
-                distinct: ["text"],
-                orderBy: {
-                  text: "asc",
-                },
-              },
-            },
-            orderBy: {
-              text: "asc",
-            },
-          }),
-          prisma.eventQuestion.count({ where }),
-        ]);
+        // Ana soru verilerini çek (random sıralı)
+        const questions = await prisma.$queryRawUnsafe<
+          { id: string; text: string; culture: string }[]
+        >(
+          `
+      SELECT eq.id, eq.text, eq.culture
+      FROM "EventQuestion" eq
+      ${whereClause}
+      ORDER BY RANDOM()
+      LIMIT ${sizeNum}
+      OFFSET ${(pageNum - 1) * sizeNum}
+      `,
+        );
+
+        // Cevapları ayrı çek
+        const questionIds = questions.map((q) => `'${q.id}'`).join(",");
+        const answers =
+          questionIds.length > 0
+            ? await prisma.$queryRawUnsafe<
+                { id: string; text: string; eventQuestionId: string }[]
+              >(
+                `
+            SELECT eqa.id, eqa.text, eqa."eventQuestionId"
+            FROM "EventQuestionAnswer" eqa
+            WHERE eqa."eventQuestionId" IN (${questionIds})
+            ORDER BY eqa.text ASC
+            `,
+              )
+            : [];
+
+        // Cevapları sorulara bağla
+        const questionMap = questions.map((q) => ({
+          ...q,
+          answers: answers
+            .filter((a) => a.eventQuestionId === q.id)
+            .map((a) => ({ id: a.id, text: a.text })),
+        }));
+
+        // Toplam sayıyı çek
+        const totalCountResult = await prisma.$queryRawUnsafe<
+          { count: number }[]
+        >(
+          `
+      SELECT COUNT(*)::int AS count
+      FROM "EventQuestion" eq
+      ${whereClause}
+      `,
+        );
+        const total = totalCountResult[0]?.count ?? 0;
 
         reply.code(200).send({
-          data: questions,
+          data: questionMap,
           meta: {
             page: pageNum,
             size: sizeNum,
