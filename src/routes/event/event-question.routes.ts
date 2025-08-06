@@ -63,7 +63,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
         >(
           `
       SELECT eq.id, eq.text, eq.culture
-      FROM "EventQuestion" eq
+      FROM "event_questions" eq
       ${whereClause}
       ORDER BY RANDOM()
       LIMIT ${sizeNum}
@@ -80,7 +80,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
               >(
                 `
             SELECT eqa.id, eqa.text, eqa."eventQuestionId"
-            FROM "EventQuestionAnswer" eqa
+            FROM "event_question_answers" eqa
             WHERE eqa."eventQuestionId" IN (${questionIds})
             ORDER BY eqa.text ASC
             `,
@@ -101,7 +101,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
         >(
           `
       SELECT COUNT(*)::int AS count
-      FROM "EventQuestion" eq
+      FROM "event_questions" eq
       ${whereClause}
       `,
         );

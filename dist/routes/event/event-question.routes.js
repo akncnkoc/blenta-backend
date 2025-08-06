@@ -58,7 +58,7 @@ async function eventQuestionRoutes(fastify) {
                 // Ana soru verilerini çek (random sıralı)
                 const questions = await prisma.$queryRawUnsafe(`
       SELECT eq.id, eq.text, eq.culture
-      FROM "EventQuestion" eq
+      FROM "event_questions" eq
       ${whereClause}
       ORDER BY RANDOM()
       LIMIT ${sizeNum}
@@ -69,7 +69,7 @@ async function eventQuestionRoutes(fastify) {
                 const answers = questionIds.length > 0
                     ? await prisma.$queryRawUnsafe(`
             SELECT eqa.id, eqa.text, eqa."eventQuestionId"
-            FROM "EventQuestionAnswer" eqa
+            FROM "event_question_answers" eqa
             WHERE eqa."eventQuestionId" IN (${questionIds})
             ORDER BY eqa.text ASC
             `)
@@ -84,7 +84,7 @@ async function eventQuestionRoutes(fastify) {
                 // Toplam sayıyı çek
                 const totalCountResult = await prisma.$queryRawUnsafe(`
       SELECT COUNT(*)::int AS count
-      FROM "EventQuestion" eq
+      FROM "event_questions" eq
       ${whereClause}
       `);
                 const total = totalCountResult[0]?.count ?? 0;
