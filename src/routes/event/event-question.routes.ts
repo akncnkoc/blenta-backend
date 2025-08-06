@@ -25,6 +25,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
               id: z.string(),
               text: z.string(),
               culture: z.string(),
+              sort: z.number(),
               answers: z.array(
                 z.object({
                   id: z.string(),
@@ -48,67 +49,35 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
       const sizeNum = Math.max(1, parseInt(size));
 
       try {
-        // WHERE koşulları oluştur
-        const whereClauseParts: string[] = [];
-        if (lang) whereClauseParts.push(`eq."culture" = '${lang}'`);
-        if (search) whereClauseParts.push(`eq."text" ILIKE '%${search}%'`);
-        const whereClause =
-          whereClauseParts.length > 0
-            ? `WHERE ${whereClauseParts.join(" AND ")}`
-            : "";
+        const where = {
+          ...(lang ? { culture: lang } : {}),
+          ...(search
+            ? { text: { contains: search, mode: Prisma.QueryMode.insensitive } }
+            : {}),
+        };
 
-        // Ana soru verilerini çek (random sıralı)
-        const questions = await prisma.$queryRawUnsafe<
-          { id: string; text: string; culture: string }[]
-        >(
-          `
-      SELECT eq.id, eq.text, eq.culture
-      FROM "event_questions" eq
-      ${whereClause}
-      ORDER BY RANDOM()
-      LIMIT ${sizeNum}
-      OFFSET ${(pageNum - 1) * sizeNum}
-      `,
-        );
-
-        // Cevapları ayrı çek
-        const questionIds = questions.map((q) => `'${q.id}'`).join(",");
-        const answers =
-          questionIds.length > 0
-            ? await prisma.$queryRawUnsafe<
-                { id: string; text: string; eventQuestionId: string }[]
-              >(
-                `
-            SELECT eqa.id, eqa.text, eqa."questionId"
-            FROM "event_question_answers" eqa
-            WHERE eqa."questionId" IN (${questionIds})
-            ORDER BY eqa.text ASC
-            `,
-              )
-            : [];
-
-        // Cevapları sorulara bağla
-        const questionMap = questions.map((q) => ({
-          ...q,
-          answers: answers
-            .filter((a) => a.eventQuestionId === q.id)
-            .map((a) => ({ id: a.id, text: a.text })),
-        }));
-
-        // Toplam sayıyı çek
-        const totalCountResult = await prisma.$queryRawUnsafe<
-          { count: number }[]
-        >(
-          `
-      SELECT COUNT(*)::int AS count
-      FROM "event_questions" eq
-      ${whereClause}
-      `,
-        );
-        const total = totalCountResult[0]?.count ?? 0;
+        const [questions, total] = await Promise.all([
+          prisma.eventQuestion.findMany({
+            skip: (pageNum - 1) * sizeNum,
+            take: sizeNum,
+            where,
+            include: {
+              answers: {
+                distinct: ["text"],
+                orderBy: {
+                  text: "asc",
+                },
+              },
+            },
+            orderBy: {
+              sort: "asc",
+            },
+          }),
+          prisma.eventQuestion.count({ where }),
+        ]);
 
         reply.code(200).send({
-          data: questionMap,
+          data: questions,
           meta: {
             page: pageNum,
             size: sizeNum,
@@ -137,6 +106,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
           id: z.string(),
           text: z.string(),
           culture: z.string(),
+          sort: z.number(),
           answers: z.array(
             z.object({
               id: z.string(),
@@ -176,19 +146,21 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
       body: z.object({
         text: z.string(),
         culture: z.string(),
+        sort: z.number(),
         answers: z.array(z.string()).default([]),
       }),
       response: {
         201: z.object({
           text: z.string(),
           culture: z.string(),
+          sort: z.number(),
         }),
         409: z.object({ message: z.string() }),
         500: z.object({ message: z.string() }),
       },
     },
     handler: async (req, reply) => {
-      const { answers, culture, text } = req.body;
+      const { answers, sort, culture, text } = req.body;
 
       try {
         const result = await prisma.$transaction(async (tx) => {
@@ -205,6 +177,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
             data: {
               text,
               culture,
+              sort,
               answers: {
                 create: answers.map((a) => ({ text: a })),
               },
@@ -213,6 +186,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
           });
 
           return {
+            sort,
             text,
             culture,
           };
@@ -241,6 +215,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
       body: z.object({
         text: z.string(),
         culture: z.string(),
+        sort: z.number(),
         answers: z.array(z.string()).optional(), // cevap metinleri opsiyonel
       }),
       response: {
@@ -248,6 +223,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
           id: z.string(),
           text: z.string(),
           culture: z.string(),
+          sort: z.number(),
           answers: z.array(
             z.object({
               id: z.string(),
@@ -262,7 +238,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
     },
     handler: async (req, reply) => {
       const { id } = req.params as { id: string };
-      const { text, culture, answers } = req.body;
+      const { text, culture, sort, answers } = req.body;
 
       try {
         // Soru ve cevapları yükle
@@ -281,7 +257,7 @@ export default async function eventQuestionRoutes(fastify: FastifyInstance) {
           // EventQuestion güncelle
           await tx.eventQuestion.update({
             where: { id },
-            data: { text, culture },
+            data: { text, culture, sort },
           });
 
           if (answers && answers.length > 0) {

@@ -259,6 +259,7 @@ model EventQuestion {
   id        String   @id @default(uuid())
   text      String
   culture   String
+  sort      Int  @default(1)
   createdAt DateTime @default(now())
 
   answers EventQuestionAnswer[]

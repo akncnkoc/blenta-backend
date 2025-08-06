@@ -27,6 +27,7 @@ async function eventQuestionRoutes(fastify) {
                         id: v4_1.default.string(),
                         text: v4_1.default.string(),
                         culture: v4_1.default.string(),
+                        sort: v4_1.default.number(),
                         answers: v4_1.default.array(v4_1.default.object({
                             id: v4_1.default.string(),
                             text: v4_1.default.string(),
@@ -46,50 +47,33 @@ async function eventQuestionRoutes(fastify) {
             const pageNum = Math.max(1, parseInt(page));
             const sizeNum = Math.max(1, parseInt(size));
             try {
-                // WHERE koşulları oluştur
-                const whereClauseParts = [];
-                if (lang)
-                    whereClauseParts.push(`eq."culture" = '${lang}'`);
-                if (search)
-                    whereClauseParts.push(`eq."text" ILIKE '%${search}%'`);
-                const whereClause = whereClauseParts.length > 0
-                    ? `WHERE ${whereClauseParts.join(" AND ")}`
-                    : "";
-                // Ana soru verilerini çek (random sıralı)
-                const questions = await prisma.$queryRawUnsafe(`
-      SELECT eq.id, eq.text, eq.culture
-      FROM "event_questions" eq
-      ${whereClause}
-      ORDER BY RANDOM()
-      LIMIT ${sizeNum}
-      OFFSET ${(pageNum - 1) * sizeNum}
-      `);
-                // Cevapları ayrı çek
-                const questionIds = questions.map((q) => `'${q.id}'`).join(",");
-                const answers = questionIds.length > 0
-                    ? await prisma.$queryRawUnsafe(`
-            SELECT eqa.id, eqa.text, eqa."questionId"
-            FROM "event_question_answers" eqa
-            WHERE eqa."questionId" IN (${questionIds})
-            ORDER BY eqa.text ASC
-            `)
-                    : [];
-                // Cevapları sorulara bağla
-                const questionMap = questions.map((q) => ({
-                    ...q,
-                    answers: answers
-                        .filter((a) => a.eventQuestionId === q.id)
-                        .map((a) => ({ id: a.id, text: a.text })),
-                }));
-                // Toplam sayıyı çek
-                const totalCountResult = await prisma.$queryRawUnsafe(`
-      SELECT COUNT(*)::int AS count
-      FROM "event_questions" eq
-      ${whereClause}
-      `);
-                const total = totalCountResult[0]?.count ?? 0;
+                const where = {
+                    ...(lang ? { culture: lang } : {}),
+                    ...(search
+                        ? { text: { contains: search, mode: client_1.Prisma.QueryMode.insensitive } }
+                        : {}),
+                };
+                const [questions, total] = await Promise.all([
+                    prisma.eventQuestion.findMany({
+                        skip: (pageNum - 1) * sizeNum,
+                        take: sizeNum,
+                        where,
+                        include: {
+                            answers: {
+                                distinct: ["text"],
+                                orderBy: {
+                                    text: "asc",
+                                },
+                            },
+                        },
+                        orderBy: {
+                            sort: "asc",
+                        },
+                    }),
+                    prisma.eventQuestion.count({ where }),
+                ]);
                 reply.code(200).send({
-                    data: questionMap,
+                    data: questions,
                     meta: {
                         page: pageNum,
                         size: sizeNum,
@@ -119,6 +103,7 @@ async function eventQuestionRoutes(fastify) {
                     id: v4_1.default.string(),
                     text: v4_1.default.string(),
                     culture: v4_1.default.string(),
+                    sort: v4_1.default.number(),
                     answers: v4_1.default.array(v4_1.default.object({
                         id: v4_1.default.string(),
                         text: v4_1.default.string(),
@@ -157,19 +142,21 @@ async function eventQuestionRoutes(fastify) {
             body: v4_1.default.object({
                 text: v4_1.default.string(),
                 culture: v4_1.default.string(),
+                sort: v4_1.default.number(),
                 answers: v4_1.default.array(v4_1.default.string()).default([]),
             }),
             response: {
                 201: v4_1.default.object({
                     text: v4_1.default.string(),
                     culture: v4_1.default.string(),
+                    sort: v4_1.default.number(),
                 }),
                 409: v4_1.default.object({ message: v4_1.default.string() }),
                 500: v4_1.default.object({ message: v4_1.default.string() }),
             },
         },
         handler: async (req, reply) => {
-            const { answers, culture, text } = req.body;
+            const { answers, sort, culture, text } = req.body;
             try {
                 const result = await prisma.$transaction(async (tx) => {
                     const existing = await prisma.eventQuestion.findFirst({
@@ -185,6 +172,7 @@ async function eventQuestionRoutes(fastify) {
                         data: {
                             text,
                             culture,
+                            sort,
                             answers: {
                                 create: answers.map((a) => ({ text: a })),
                             },
@@ -192,6 +180,7 @@ async function eventQuestionRoutes(fastify) {
                         include: { answers: true },
                     });
                     return {
+                        sort,
                         text,
                         culture,
                     };
@@ -219,6 +208,7 @@ async function eventQuestionRoutes(fastify) {
             body: v4_1.default.object({
                 text: v4_1.default.string(),
                 culture: v4_1.default.string(),
+                sort: v4_1.default.number(),
                 answers: v4_1.default.array(v4_1.default.string()).optional(), // cevap metinleri opsiyonel
             }),
             response: {
@@ -226,6 +216,7 @@ async function eventQuestionRoutes(fastify) {
                     id: v4_1.default.string(),
                     text: v4_1.default.string(),
                     culture: v4_1.default.string(),
+                    sort: v4_1.default.number(),
                     answers: v4_1.default.array(v4_1.default.object({
                         id: v4_1.default.string(),
                         text: v4_1.default.string(),
@@ -238,7 +229,7 @@ async function eventQuestionRoutes(fastify) {
         },
         handler: async (req, reply) => {
             const { id } = req.params;
-            const { text, culture, answers } = req.body;
+            const { text, culture, sort, answers } = req.body;
             try {
                 // Soru ve cevapları yükle
                 const existing = await prisma.eventQuestion.findUnique({
@@ -254,7 +245,7 @@ async function eventQuestionRoutes(fastify) {
                     // EventQuestion güncelle
                     await tx.eventQuestion.update({
                         where: { id },
-                        data: { text, culture },
+                        data: { text, culture, sort },
                     });
                     if (answers && answers.length > 0) {
                         // Mevcut cevapların metinleri
